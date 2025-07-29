@@ -10,11 +10,10 @@ datasource db {
 
 model User {
   id       String @id @default(uuid())
-  username String
-  email    String
+  email    String @unique
   password String
   name     String
-  photo    String
+  photo    String?
 
   createdAt DateTime @default(now())
   updateAt  DateTime @updatedAt
