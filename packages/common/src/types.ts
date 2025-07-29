@@ -1,10 +1,6 @@
 import { z } from "zod";
 
 export const CreateUserSchema = z.object({
-  username: z
-    .string()
-    .min(4, { message: "Username must be at least 4 characters long!" })
-    .max(20, { message: "Username cannot be longer than 20 characters." }),
   email: z.email(),
   password: z
     .string()
@@ -16,10 +12,7 @@ export const CreateUserSchema = z.object({
 });
 
 export const SignInSchema = z.object({
-  username: z
-    .string()
-    .min(4, { message: "Username must be at least 4 characters long!" })
-    .max(20, { message: "Username cannot be longer than 20 characters." }),
+  email: z.email(),
   password: z
     .string()
     .min(8, { message: "Password must be at least 8 characters!" }),
