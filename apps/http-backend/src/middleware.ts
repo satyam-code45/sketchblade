@@ -6,8 +6,8 @@ export function middleware(req: Request, res: Response, next: NextFunction) {
   const token = req.headers["authorization"] ?? "";
 
   console.log("token: " + token);
-  
-  const decoded =  jwt.verify(token, JWT_SECRET);
+
+  const decoded = jwt.verify(token, JWT_SECRET);
   if (decoded) {
     //@ts-ignore : TODO: Fix this??
     //Google how to update the strucure of the req in express
