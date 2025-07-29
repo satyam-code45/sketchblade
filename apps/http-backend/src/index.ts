@@ -78,7 +78,7 @@ app.post("/sign-in", async (req, res) => {
       });
     }
 
-    const validUser = bcrypt.compare(req.body.password, user.password);
+    const validUser = await bcrypt.compare(req.body.password, user.password);
 
     if (!validUser) {
       return res.status(404).json({
@@ -102,17 +102,33 @@ app.post("/sign-in", async (req, res) => {
   }
 });
 
-app.post("/create-room", middleware, (req, res) => {
-  //db call
-
-  const data = CreateRoomSchema.safeParse(req.body);
-  if (!data.success) {
+app.post("/create-room", middleware, async (req, res) => {
+  const parsedData = CreateRoomSchema.safeParse(req.body);
+  if (!parsedData.success) {
     return res.json({
       message: "Incorrect Inputs",
     });
   }
+  //@ts-ignore : TODO: Fix this??
+  const userId = req.userId;
 
-  res.send("RoomId: 1234567 ");
+  try {
+    const room = await prismaClient.room.create({
+      data: {
+        slug: parsedData.data.name,
+        adminId: userId,
+      },
+    });
+
+    res.status(200).json({
+      roomId: room.id,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(411).json({
+      message: "Room already exists!"
+    });
+  }
 });
 
 app.listen(3001);
