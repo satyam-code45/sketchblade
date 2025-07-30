@@ -126,9 +126,26 @@ app.post("/create-room", middleware, async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(411).json({
-      message: "Room already exists!"
+      message: "Room already exists!",
     });
   }
+});
+
+app.get("/chats/:roomId", async (req, res) => {
+  const roomId = Number(req.params.roomId);
+  const messages = await prismaClient.chat.findMany({
+    where: {
+    roomId: roomId,
+    },
+    orderBy: {
+      id: "desc",
+    },
+    take: 50,
+  });
+
+  res.json({
+    messages,
+  });
 });
 
 app.listen(3001);
