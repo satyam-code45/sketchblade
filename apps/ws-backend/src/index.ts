@@ -83,7 +83,7 @@ wss.on("connection", function connection(ws, request) {
       const message = parsedData.message;
 
 
-      //push to qeue
+      //push to queue
       await prismaClient.chat.create({
         data: {
           roomId,
