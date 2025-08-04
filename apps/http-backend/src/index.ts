@@ -9,9 +9,11 @@ import {
 } from "@repo/common/types";
 import { prismaClient } from "@repo/db/client";
 import bcrypt from "bcrypt";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 app.post("/sign-up", async (req, res) => {
   const data = CreateUserSchema.safeParse(req.body);
@@ -151,7 +153,7 @@ app.get("/chats/:roomId", async (req, res) => {
 app.get("/room/:slug", async (req, res) => {
   const slug = req.params.slug;
   console.log(slug);
-  
+
   const room = await prismaClient.room.findFirst({
     where: {
       slug,

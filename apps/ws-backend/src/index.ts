@@ -48,19 +48,16 @@ wss.on("connection", function connection(ws, request) {
   console.log("token: ", token);
 
   const userId = checkUser(token);
-  console.log("Connected sucessfully with userId: ", userId);
   if (userId == null) {
     ws.close();
     return null;
   }
-  console.log("Connected sucessfully after null");
 
   users.push({
     userId,
     rooms: [],
     ws,
   });
-  console.log("users: ", users);
 
   ws.on("message", async function message(data) {
     const parsedData = JSON.parse(data as unknown as string);
