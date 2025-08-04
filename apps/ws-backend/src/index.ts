@@ -24,10 +24,6 @@ function checkUser(token: string): string | null {
     if (!decoded || !decoded.userId) {
       return null;
     }
-
-    console.log("Connected sucessfully returning userId");
-    console.log("userId: ", decoded.userId);
-
     return decoded.userId;
   } catch (error) {
     console.log(error);
@@ -44,9 +40,6 @@ wss.on("connection", function connection(ws, request) {
   }
   const queryParams = new URLSearchParams(url.split("?")[1]);
   const token = queryParams.get("token") || "";
-
-  console.log("token: ", token);
-
   const userId = checkUser(token);
   if (userId == null) {
     ws.close();
@@ -79,7 +72,6 @@ wss.on("connection", function connection(ws, request) {
       const roomId = parsedData.roomId;
       const message = parsedData.message;
 
-
       //push to queue
       await prismaClient.chat.create({
         data: {
@@ -90,7 +82,7 @@ wss.on("connection", function connection(ws, request) {
       });
 
       users.forEach((user) => {
-        if (user.rooms.includes(roomId)) {
+        if (user.rooms.includes(String(roomId))) {
           user.ws.send(
             JSON.stringify({
               type: "chat",
