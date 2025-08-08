@@ -1,15 +1,11 @@
-import { initDraw } from "@/draw/init";
 import { useEffect, useRef, useState } from "react";
 import IconButton from "./IconButton";
 import { Pencil } from "lucide-react";
 import { RectangleHorizontal } from "lucide-react";
 import { Circle } from "lucide-react";
+import { Game } from "@/draw";
 
-export const enum CurrentShape {
-  Rect = "rect",
-  Circle = "circle",
-  Pencil = "pencil",
-}
+export type Tool = "circle" | "rect" | "pencil";
 
 export default function Canvas({
   roomId,
@@ -19,13 +15,23 @@ export default function Canvas({
   socket: WebSocket;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [selectedTool, setSelectedTool] = useState<CurrentShape>(
-    CurrentShape.Pencil
-  );
+  const [selectedTool, setSelectedTool] = useState<Tool>("circle");
+  const [game, setGame] = useState<Game>();
+
+  useEffect(() => {
+    game?.setTool(selectedTool);
+    console.log("Use Effect selected tool renender");
+  }, [selectedTool, game]);
 
   useEffect(() => {
     if (canvasRef.current) {
-      initDraw(canvasRef.current, roomId, socket);
+      console.log("Game instance is created");
+
+      const g = new Game(canvasRef.current, roomId, socket);
+      setGame(g);
+      return () => {
+        g.destory();
+      };
     }
   }, [canvasRef, roomId, socket]);
 
@@ -45,8 +51,8 @@ function Topbar({
   selectedTool,
   setSelectedTool,
 }: {
-  selectedTool: CurrentShape;
-  setSelectedTool: (s: CurrentShape) => void;
+  selectedTool: Tool;
+  setSelectedTool: (s: Tool) => void;
 }) {
   return (
     <div className="fixed top-10 left-10">
@@ -54,21 +60,21 @@ function Topbar({
         <IconButton
           icon={<Pencil />}
           onClick={() => {
-            setSelectedTool(CurrentShape.Pencil);
+            setSelectedTool("pencil");
           }}
           activated={selectedTool === "pencil"}
         />
         <IconButton
           icon={<RectangleHorizontal />}
           onClick={() => {
-            setSelectedTool(CurrentShape.Rect);
+            setSelectedTool("rect");
           }}
           activated={selectedTool === "rect"}
         />
         <IconButton
           icon={<Circle />}
           onClick={() => {
-            setSelectedTool(CurrentShape.Circle);
+            setSelectedTool("circle");
           }}
           activated={selectedTool === "circle"}
         />
