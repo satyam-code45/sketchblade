@@ -1,135 +1,192 @@
-# Turborepo starter
+# SketchBlade - Collaborative Drawing Platform
 
-This Turborepo starter is maintained by the Turborepo core team.
+A real-time collaborative drawing platform inspired by Excalidraw, built with modern web technologies. Users can create rooms and draw together in real-time with multiple drawing tools.
 
-## Using this example
+## 🎥 Project Demo
 
-Run the following command:
+> **🚀 Coming Soon**: This project will be live soon! Until then, enjoy this demo video showcasing the current functionality.
 
-```sh
-npx create-turbo@latest
+### 📺 [**Watch Demo Video →**](https://drive.google.com/file/d/1o9F67D2cxU0B7mO_A_Rm60XsxLLtqNcd/view?usp=sharing)
+
+```
+🎬 Demo Highlights:
+✨ Real-time collaborative drawing
+🎨 Multiple drawing tools (pencil, rectangle, circle)
+👥 Multi-user room functionality
+💬 Live chat integration
+🖱️ Smooth drawing experience
 ```
 
-## What's inside?
+*The video demonstrates the seamless collaborative drawing experience with multiple users drawing simultaneously in the same room.*
 
-This Turborepo includes the following packages/apps:
+---
+
+## 🚀 Features
+
+- **Real-time Collaboration**: Multiple users can draw simultaneously in the same room
+- **Multiple Drawing Tools**: Pencil, rectangle, and circle drawing tools
+- **Room-based Sessions**: Create and join drawing rooms
+- **User Authentication**: Secure sign-up and sign-in system
+- **Real-time Chat**: Chat with other users while drawing (coming soon)
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 14, TypeScript, Tailwind CSS
+- **Backend**: Node.js, Express.js, WebSocket (ws)
+- **Database**: PostgreSQL with Prisma ORM
+- **Monorepo**: Turborepo for workspace management
+- **Real-time**: WebSocket connections for live collaboration
+
+## 📁 Project Structure
 
 ### Apps and Packages
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+- `excalidraw-frontend`: Main drawing application built with Next.js
+- `http-backend`: REST API server for authentication and room management
+- `ws-backend`: WebSocket server for real-time drawing synchronization
+- `@repo/db`: Database package with Prisma schema and client
+- `@repo/common`: Shared TypeScript types and validation schemas
+- `@repo/backend-common`: Shared backend utilities and configuration
+- `@repo/ui`: Shared React component library
+- `@repo/eslint-config`: ESLint configurations
+- `@repo/typescript-config`: TypeScript configurations
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## 🚦 Getting Started
 
-### Utilities
+### Prerequisites
 
-This Turborepo has some additional tools already setup for you:
+- Node.js 18+ 
+- pnpm (recommended) or npm/yarn
+- PostgreSQL database
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/satyam-code45/sketchblade.git
+   cd sketchblade
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
+
+3. **Set up environment variables**
+   Create `.env` files in the respective packages:
+   ```bash
+   # packages/db/.env
+   DATABASE_URL="postgresql://username:password@localhost:5432/sketchblade"
+   
+   # apps/http-backend/.env (if needed)
+   JWT_SECRET="your-jwt-secret"
+   ```
+
+4. **Set up the database**
+   ```bash
+   cd packages/db
+   npx prisma migrate dev
+   npx prisma generate
+   ```
+
+5. **Start the development servers**
+   ```bash
+   # Start all services
+   pnpm dev
+   
+   # Or start specific services
+   pnpm dev --filter=excalidraw-frontend
+   pnpm dev --filter=http-backend
+   pnpm dev --filter=ws-backend
+   ```
 
 ### Build
 
-To build all apps and packages, run the following command:
+To build all apps and packages:
 
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+```bash
+pnpm build
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+To build specific packages:
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+```bash
+pnpm build --filter=excalidraw-frontend
+pnpm build --filter=http-backend
 ```
 
-### Develop
+## 🎯 How It Works
 
-To develop all apps and packages, run the following command:
+1. **Authentication**: Users sign up/sign in through the HTTP backend
+2. **Room Creation**: Users can create or join drawing rooms using a unique slug
+3. **Real-time Drawing**: WebSocket connections enable real-time synchronization of drawing events
+4. **Drawing Tools**: Multiple tools available - pencil for freehand, rectangle, and circle shapes
+5. **Persistence**: Drawings are stored in PostgreSQL database (⚠️ **Currently not implemented**)
 
-```
-cd my-turborepo
+## 🔧 Current Status & Known Issues
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
+**✅ Working Features:**
+- User authentication (sign-up/sign-in)
+- Room creation and joining
+- Real-time chat system
+- Drawing tools UI (pencil, rectangle, circle)
+- WebSocket connection setup
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
+**⚠️ Issues to Fix:**
+- **Drawing data is not being saved to database** - No database schema for drawings
+- **Drawing events are not broadcasted to other users** - WebSocket server doesn't handle drawing events
+- **No persistence of drawings** - Missing API endpoints for saving/loading drawings
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+## 🛠️ Architecture
 
 ```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Frontend       │    │  HTTP Backend   │    │  WebSocket      │
+│  (Next.js)      │    │  (Express)      │    │  Backend        │
+│                 │    │                 │    │                 │
+│  - Drawing UI   │◄──►│  - Auth APIs    │    │  - Chat events  │
+│  - Canvas       │    │  - Room APIs    │◄──►│  - Join/Leave   │
+│  - Tools        │    │  - User mgmt    │    │  - [Drawing]*   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │   PostgreSQL    │
+                    │   Database      │
+                    │                 │
+                    │  - Users        │
+                    │  - Rooms        │
+                    │  - Chats        │
+                    │  - [Drawings]*  │
+                    └─────────────────┘
 ```
+*Features marked with [*] are planned but not yet implemented.
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+## 📚 API Endpoints
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+### HTTP Backend (Port 3001)
+- `POST /sign-up` - User registration
+- `POST /sign-in` - User authentication  
+- `POST /create-room` - Create new drawing room
+- `GET /room/:slug` - Get room details
+- `GET /chats/:roomId` - Get chat history
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
+### WebSocket Backend (Port 8080)
+- `join_room` - Join a drawing room
+- `leave_room` - Leave a drawing room
+- `chat` - Send chat messages
+- *(Missing: drawing event handlers)*
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
+## 🤝 Contributing
 
-## Useful Links
+This project is currently in development. Main areas that need work:
 
-Learn more about the power of Turborepo:
+1. **Database Schema**: Add models for storing drawing data
+2. **WebSocket Events**: Implement drawing event handlers
+3. **API Endpoints**: Add endpoints for saving/loading drawings
+4. **Frontend Integration**: Connect drawing events to WebSocket
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+## 📝 License
+
+This project is open source and available under the [MIT License](LICENSE).
