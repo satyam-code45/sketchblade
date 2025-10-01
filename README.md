@@ -8,6 +8,13 @@ A real-time collaborative drawing platform inspired by Excalidraw, built with mo
 
 ### 📺 [**Watch Demo Video →**](https://drive.google.com/file/d/1o9F67D2cxU0B7mO_A_Rm60XsxLLtqNcd/view?usp=sharing)
 
+
+
+https://github.com/user-attachments/assets/eaf5c0cc-b80f-477f-940c-1b06640f3aa0
+
+
+
+
 ```
 🎬 Demo Highlights:
 ✨ Real-time collaborative drawing
