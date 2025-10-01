@@ -111,7 +111,7 @@ app.post("/create-room", middleware, async (req, res) => {
       message: "Incorrect Inputs",
     });
   }
-  //@ts-ignore : TODO: Fix this??
+  //@ts-ignore 
   const userId = req.userId;
 
   try {
@@ -165,4 +165,7 @@ app.get("/room/:slug", async (req, res) => {
   });
 });
 
-app.listen(3001);
+console.log("HTTP backend is listening");
+
+
+app.listen(4000);
