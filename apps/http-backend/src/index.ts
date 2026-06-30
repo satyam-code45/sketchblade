@@ -127,23 +127,20 @@ app.post("/create-room", middleware, async (req, res) => {
     slug = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
   } while (await prismaClient.room.findUnique({ where: { slug } }));
 
-  const hashedPassword = parsedData.data.password
-    ? await bcrypt.hash(parsedData.data.password, 5)
-    : null;
-
   try {
     const room = await prismaClient.room.create({
       data: {
         slug,
         name: parsedData.data.name,
         adminId: userId,
-        password: hashedPassword,
+        password: parsedData.data.password ?? null,
       },
     });
 
     res.status(200).json({
       roomId: room.id,
       slug: room.slug,
+      password: room.password,
     });
   } catch (error) {
     console.log(error);
@@ -197,8 +194,7 @@ app.post("/room/:slug/join", async (req, res) => {
     if (!password) {
       return res.status(401).json({ message: "This room is password protected." });
     }
-    const valid = await bcrypt.compare(password, room.password);
-    if (!valid) {
+    if (password !== room.password) {
       return res.status(401).json({ message: "Incorrect room password." });
     }
   }
@@ -217,6 +213,7 @@ app.get("/my-rooms", middleware, async (req, res) => {
       slug: true,
       name: true,
       adminId: true,
+      password: true,
       createdAt: true,
       updateAt: true,
     },

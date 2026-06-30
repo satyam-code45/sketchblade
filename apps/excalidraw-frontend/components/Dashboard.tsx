@@ -26,6 +26,7 @@ interface Room {
   slug: string;
   name: string | null;
   adminId: string;
+  password: string | null;
   createdAt: string;
 }
 
@@ -56,7 +57,8 @@ export default function Dashboard() {
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
-  const [createdRoom, setCreatedRoom] = useState<{ id: number; slug: string; name: string } | null>(null);
+  const [createdRoom, setCreatedRoom] = useState<{ id: number; slug: string; name: string; password: string | null } | null>(null);
+  const [showCreatedPassword, setShowCreatedPassword] = useState(false);
 
   // Join room state
   const [joinSlug, setJoinSlug] = useState("");
@@ -66,6 +68,7 @@ export default function Dashboard() {
   const [joining, setJoining] = useState(false);
 
   const [copiedId, setCopiedId] = useState<number | string | null>(null);
+  const [revealedPasswords, setRevealedPasswords] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -105,8 +108,8 @@ export default function Dashboard() {
         body,
         { headers: { authorization: token } }
       );
-      const { roomId, slug } = res.data;
-      setCreatedRoom({ id: roomId, slug, name: trimmed });
+      const { roomId, slug, password } = res.data;
+      setCreatedRoom({ id: roomId, slug, name: trimmed, password: password ?? null });
       setNewRoomName("");
       setNewRoomPassword("");
       // Refresh room list in background
@@ -226,24 +229,40 @@ export default function Dashboard() {
             {createdRoom ? (
               /* Success state — show the room code */
               <div className="space-y-3">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                  <p className="mb-1 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
                     Room &quot;{createdRoom.name}&quot; created!
                   </p>
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    Share this code with teammates so they can join.
-                  </p>
-                  <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm">
-                    <span className="flex-1 tracking-widest">{createdRoom.slug}</span>
-                    <button
-                      onClick={() => copyCode(createdRoom.slug)}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {copiedId === createdRoom.slug
-                        ? <Check className="size-4 text-emerald-500" />
-                        : <Copy className="size-4" />}
-                    </button>
+                  <div>
+                    <p className="mb-1.5 text-xs text-muted-foreground">Room code</p>
+                    <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm">
+                      <span className="flex-1 tracking-widest">{createdRoom.slug}</span>
+                      <button
+                        onClick={() => copyCode(createdRoom.slug)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {copiedId === createdRoom.slug
+                          ? <Check className="size-4 text-emerald-500" />
+                          : <Copy className="size-4" />}
+                      </button>
+                    </div>
                   </div>
+                  {createdRoom.password && (
+                    <div>
+                      <p className="mb-1.5 text-xs text-muted-foreground">Password</p>
+                      <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm">
+                        <span className="flex-1">
+                          {showCreatedPassword ? createdRoom.password : "••••••••"}
+                        </span>
+                        <button
+                          onClick={() => setShowCreatedPassword((v) => !v)}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {showCreatedPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -395,25 +414,47 @@ export default function Dashboard() {
                   key={room.id}
                   className="rounded-2xl border border-border bg-card p-5 transition-all hover:border-violet-500/30 hover:shadow-md"
                 >
-                  <div className="mb-4 flex items-start gap-2.5">
-                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
-                      <Pencil className="size-4 text-violet-600 dark:text-violet-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{room.name ?? room.slug}</p>
-                      <div className="mt-1 flex items-center gap-1.5">
+                  <div className="mb-4">
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
+                        <Pencil className="size-4 text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold">{room.name ?? room.slug}</p>
                         <span className="font-mono text-xs text-muted-foreground tracking-wide">
                           {room.slug}
                         </span>
+                        <p className="mt-0.5 text-xs text-muted-foreground/70">
+                          {new Date(room.createdAt).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </p>
                       </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground/70">
-                        {new Date(room.createdAt).toLocaleDateString(undefined, {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
                     </div>
+                    {room.password && (
+                      <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5">
+                        <Lock className="size-3 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 font-mono text-xs">
+                          {revealedPasswords.has(room.id) ? room.password : "••••••••"}
+                        </span>
+                        <button
+                          onClick={() =>
+                            setRevealedPasswords((prev) => {
+                              const next = new Set(prev);
+                              next.has(room.id) ? next.delete(room.id) : next.add(room.id);
+                              return next;
+                            })
+                          }
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {revealedPasswords.has(room.id)
+                            ? <EyeOff className="size-3.5" />
+                            : <Eye className="size-3.5" />}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2">
