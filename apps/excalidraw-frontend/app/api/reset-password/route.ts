@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
-import { prismaClient } from "@repo/db/client";
+import { prismaClient } from "@/lib/prisma";
 import { verifyResetToken } from "@/lib/api-auth";
 
 export async function POST(req: Request) {

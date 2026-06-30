@@ -27,6 +27,10 @@ out/
 build
 dist
 
+# Prisma generated clients (regenerated on postinstall)
+packages/db/src/generated/
+apps/excalidraw-frontend/src/generated/
+
 
 # Debug
 npm-debug.log*

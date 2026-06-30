@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
-import { prismaClient } from "@repo/db/client";
+import { prismaClient } from "@/lib/prisma";
 import { SignInSchema } from "@repo/common/types";
 import { signToken } from "@/lib/api-auth";
 
