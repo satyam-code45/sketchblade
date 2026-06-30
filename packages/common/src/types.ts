@@ -21,6 +21,7 @@ export const SignInSchema = z.object({
 export const CreateRoomSchema = z.object({
   name: z
     .string()
-    .min(3, { message: "Room name must be at least 3 characters long." })
-    .max(10, { message: "Room name cannot exceed 10 characters." }),
+    .min(1, { message: "Room name is required." })
+    .max(50, { message: "Room name cannot exceed 50 characters." }),
+  password: z.string().optional(),
 });

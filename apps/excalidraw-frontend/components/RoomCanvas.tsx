@@ -2,26 +2,31 @@
 
 import { WS_URL } from "@/config";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Canvas from "./Canvas";
 
 export function RoomCanvas({ roomId }: { roomId: string }) {
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    const ws = new WebSocket(
-      `${WS_URL}?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI4MTVkMDkwZC0wZDcwLTQ1N2QtOGMyOS04MzZjMjJiNGUwYmMiLCJpYXQiOjE3NTkzMTkyODMsImV4cCI6MTc2MTkxMTI4M30.dPMeqDjWM-5kzWQmVBvmvfixPjxS-rb0A9_hMxs0LNg`
-    );
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/sign-in");
+      return;
+    }
+
+    const ws = new WebSocket(`${WS_URL}?token=${token}`);
 
     ws.onopen = () => {
       setSocket(ws);
-      ws.send(
-        JSON.stringify({
-          type: "join_room",
-          roomId,
-        })
-      );
+      ws.send(JSON.stringify({ type: "join_room", roomId }));
     };
-  }, [roomId]);
+
+    ws.onclose = () => setSocket(null);
+
+    return () => ws.close();
+  }, [roomId, router]);
 
   if (!socket) {
     return <div>Loading chat shapes for you.....</div>;

@@ -22,11 +22,12 @@ model User {
 }
 
 model Room {
-  id      Int     @id @default(autoincrement())
-  slug    String  @unique
-  name    String?
-  adminId String
-  admin   User    @relation(fields: [adminId], references: [id])
+  id       Int     @id @default(autoincrement())
+  slug     String  @unique
+  name     String?
+  adminId  String
+  admin    User    @relation(fields: [adminId], references: [id])
+  password String?
 
   createdAt DateTime @default(now())
   updateAt  DateTime @updatedAt
