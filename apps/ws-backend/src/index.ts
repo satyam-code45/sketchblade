@@ -1,11 +1,26 @@
+import { createServer } from "http";
 import { WebSocket, WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
 import { prismaClient } from "@repo/db/client";
 
-const WS_PORT = Number(process.env.WS_PORT) || 8080;
-const wss = new WebSocketServer({ port: WS_PORT }, () =>
-  console.log(`WebSocket server listening on port ${WS_PORT}`)
+const PORT = Number(process.env.PORT) || 8080;
+
+// HTTP server — serves /health for uptime monitors (keeps Render free tier alive)
+const server = createServer((req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("ok");
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+const wss = new WebSocketServer({ server });
+
+server.listen(PORT, () =>
+  console.log(`WS + HTTP server listening on port ${PORT}`)
 );
 
 interface User {
