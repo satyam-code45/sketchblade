@@ -4,6 +4,15 @@ generator client {
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
+// Second generator so the Next.js app has its own local Prisma client.
+// This puts the binary inside the app directory — exactly where Next.js
+// serverless functions look for it at runtime on Vercel.
+generator clientNextjs {
+  provider      = "prisma-client-js"
+  output        = "../../../apps/excalidraw-frontend/src/generated/prisma"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")

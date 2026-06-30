@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prismaClient } from "@repo/db/client";
+import { prismaClient } from "@/lib/prisma";
 import { CreateRoomSchema } from "@repo/common/types";
 import { getUserId } from "@/lib/api-auth";
 
