@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import axios from "axios";
 import {
   ArrowRight,
@@ -32,18 +33,7 @@ interface Room {
 }
 
 const LogoIcon = () => (
-  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path
-        d="M2 14L5.5 10.5L10.5 5.5L12.5 7.5L7.5 12.5L2 14Z"
-        stroke="white" strokeWidth="1.5" strokeLinejoin="round" fill="rgba(255,255,255,0.2)"
-      />
-      <path
-        d="M10.5 5.5L12.5 3.5L14.5 5.5L12.5 7.5L10.5 5.5Z"
-        stroke="white" strokeWidth="1.5" strokeLinejoin="round" fill="rgba(255,255,255,0.2)"
-      />
-    </svg>
-  </div>
+  <Image src="/logo.png" alt="SketchBlade" width={40} height={40} className="rounded-xl" />
 );
 
 export default function Dashboard() {
@@ -471,7 +461,7 @@ export default function Dashboard() {
                           onClick={() =>
                             setRevealedPasswords((prev) => {
                               const next = new Set(prev);
-                              next.has(room.id) ? next.delete(room.id) : next.add(room.id);
+                              if (next.has(room.id)) { next.delete(room.id); } else { next.add(room.id); }
                               return next;
                             })
                           }
