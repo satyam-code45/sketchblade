@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { HeroCta } from "@/components/HeroCta";
@@ -416,24 +417,7 @@ export default function Page() {
       <footer className="border-t border-border py-10 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-2.5 font-semibold">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-white">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M2 14L5.5 10.5L10.5 5.5L12.5 7.5L7.5 12.5L2 14Z"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                  fill="rgba(255,255,255,0.2)"
-                />
-                <path
-                  d="M10.5 5.5L12.5 3.5L14.5 5.5L12.5 7.5L10.5 5.5Z"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                  fill="rgba(255,255,255,0.2)"
-                />
-              </svg>
-            </div>
+            <Image src="/logo.png" alt="SketchBlade" width={36} height={36} className="rounded-lg" />
             <span>SketchBlade</span>
           </div>
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   Check,
@@ -209,9 +210,9 @@ export default function Canvas({
           <Link
             href="/dashboard"
             title="Back to Dashboard"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 transition-colors hover:bg-violet-500/20 dark:text-violet-400"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-opacity hover:opacity-80"
           >
-            <Pencil className="size-4" />
+            <Image src="/logo.png" alt="SketchBlade" width={36} height={36} className="rounded-lg" />
           </Link>
 
           {roomInfo ? (
