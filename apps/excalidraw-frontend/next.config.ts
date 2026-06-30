@@ -10,6 +10,13 @@ configDotenv({ path: path.resolve(process.cwd(), "../../.env"), override: false 
 // so config.ts defaults to "/api"
 delete process.env.NEXT_PUBLIC_HTTP_BACKEND;
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  // Trace files from monorepo root so Prisma's .node engine binary gets copied
+  // into the serverless function bundle on Vercel
+  outputFileTracingRoot: path.join(__dirname, "../../"),
+  outputFileTracingIncludes: {
+    "/*": ["../../packages/db/src/generated/prisma/**/*"],
+  },
+};
 
 export default nextConfig;
