@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: "SketchBlade — Real-time Collaborative Drawing",
   description:
     "Draw together in real-time. Create rooms, invite your team, and sketch simultaneously on a shared canvas.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
