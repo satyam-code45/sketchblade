@@ -15,6 +15,7 @@ import {
   Pencil,
   Plus,
   Users,
+  Github,
 } from "lucide-react";
 import { HTTP_BACKEND } from "@/config";
 import { Button } from "./ui/button";
@@ -177,17 +178,29 @@ export default function Dashboard() {
           </Link>
 
           <div className="flex items-center gap-2">
-            {userName && (
-              <span className="hidden text-sm text-muted-foreground sm:block">
-                {userName}
-              </span>
-            )}
+            <a
+              href="https://github.com/satyam-code45/sketchblade"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              title="View on GitHub"
+            >
+              <Github className="size-4" />
+            </a>
             <ThemeToggle />
+            {userName && (
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/15 text-sm font-semibold text-violet-600 dark:text-violet-400"
+                title={userName}
+              >
+                {userName[0]?.toUpperCase()}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
               onClick={signOut}
-              className="gap-1.5"
+              className="gap-1.5 text-muted-foreground"
             >
               <LogOut className="size-4" />
               <span className="hidden sm:inline">Sign Out</span>
@@ -201,6 +214,14 @@ export default function Dashboard() {
 
         {/* Greeting */}
         <div className="mb-10">
+          {!loadingRooms && (
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-600 dark:text-violet-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+              {rooms.length === 0
+                ? "No rooms yet"
+                : `${rooms.length} room${rooms.length !== 1 ? "s" : ""} · SketchBlade`}
+            </div>
+          )}
           <h1 className="text-3xl font-bold">
             {firstName ? `Welcome back, ${firstName}!` : "Dashboard"}
           </h1>
@@ -388,7 +409,14 @@ export default function Dashboard() {
 
         {/* ── My Rooms ── */}
         <div>
-          <h2 className="mb-5 text-xl font-semibold">My Rooms</h2>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-xl font-semibold">My Rooms</h2>
+            {!loadingRooms && rooms.length > 0 && (
+              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                {rooms.length}
+              </span>
+            )}
+          </div>
 
           {loadingRooms ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

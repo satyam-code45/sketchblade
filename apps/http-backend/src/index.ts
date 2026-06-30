@@ -155,13 +155,23 @@ app.get("/chats/:roomId", async (req, res) => {
       roomId: roomId,
     },
     orderBy: {
-      id: "desc",
+      id: "asc",
     },
-    take: 50,
+    take: 200,
   });
 
   res.json({
     messages,
+  });
+});
+
+app.get("/room/by-id/:roomId", async (req, res) => {
+  const roomId = Number(req.params.roomId);
+  if (isNaN(roomId)) return res.status(400).json({ message: "Invalid room ID" });
+  const room = await prismaClient.room.findUnique({ where: { id: roomId } });
+  if (!room) return res.status(404).json({ room: null });
+  res.json({
+    room: { id: room.id, slug: room.slug, name: room.name, hasPassword: !!room.password },
   });
 });
 
