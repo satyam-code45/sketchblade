@@ -40,6 +40,13 @@ export class Game {
 
   // Eraser: accumulate erased shape ids during a drag, flush on mouseUp
   private pendingErasedIds: Set<string> = new Set();
+  private pendingErasedShapes: Shape[] = [];
+
+  // Undo history: each entry is either an added shape id or a set of erased shapes
+  private history: Array<
+    | { type: "add"; shapeId: string }
+    | { type: "erase"; shapes: Shape[] }
+  > = [];
 
   // Zoom / pan
   private zoom = 1;
@@ -102,6 +109,7 @@ export class Game {
   addShape(shape: Shape) {
     if (!shape.id) (shape as Shape & { id: string }).id = genId();
     this.existingShapes.push(shape);
+    this.history.push({ type: "add", shapeId: shape.id! });
     this.clearCanvas();
     this.socket.send(JSON.stringify({
       type: "chat",
@@ -111,8 +119,27 @@ export class Game {
   }
 
   undo() {
-    if (this.existingShapes.length === 0) return;
-    this.existingShapes.pop();
+    if (this.history.length === 0) return;
+    const last = this.history.pop()!;
+
+    if (last.type === "add") {
+      this.existingShapes = this.existingShapes.filter((s) => s.id !== last.shapeId);
+      this.socket.send(JSON.stringify({
+        type: "chat",
+        roomId: Number(this.roomId),
+        message: JSON.stringify({ erase: [last.shapeId] }),
+      }));
+    } else if (last.type === "erase") {
+      last.shapes.forEach((s) => this.existingShapes.push(s));
+      last.shapes.forEach((s) => {
+        this.socket.send(JSON.stringify({
+          type: "chat",
+          roomId: Number(this.roomId),
+          message: JSON.stringify({ shape: s }),
+        }));
+      });
+    }
+
     this.clearCanvas();
   }
 
@@ -313,6 +340,7 @@ export class Game {
     }
     if (this.selectedTool === "eraser") {
       this.pendingErasedIds = new Set();
+      this.pendingErasedShapes = [];
     }
   };
 
@@ -333,7 +361,12 @@ export class Game {
     if (this.selectedTool === "eraser") {
       const thr = 20 / this.zoom;
       const toRemove = this.existingShapes.filter((s) => isNearShape(s, c.x, c.y, thr));
-      toRemove.forEach((s) => { if (s.id) this.pendingErasedIds.add(s.id); });
+      toRemove.forEach((s) => {
+        if (s.id) {
+          this.pendingErasedIds.add(s.id);
+          this.pendingErasedShapes.push(s);
+        }
+      });
       if (toRemove.length > 0) {
         this.existingShapes = this.existingShapes.filter((s) => !toRemove.includes(s));
         this.clearCanvas();
@@ -418,13 +451,14 @@ export class Game {
     if (this.selectedTool === "eraser") {
       if (this.pendingErasedIds.size > 0) {
         const ids = [...this.pendingErasedIds];
+        this.history.push({ type: "erase", shapes: [...this.pendingErasedShapes] });
         this.pendingErasedIds = new Set();
+        this.pendingErasedShapes = [];
         this.socket.send(JSON.stringify({
           type: "chat",
           roomId: Number(this.roomId),
           message: JSON.stringify({ erase: ids }),
         }));
-        // Also persist to DB via the socket → WS backend saves it
       }
       this.clearCanvas();
       return;
