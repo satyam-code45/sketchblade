@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sketchblade-ws
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: .
+    buildCommand: npm install -g pnpm && pnpm install && pnpm --filter=ws-backend build
+    startCommand: node apps/ws-backend/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production
