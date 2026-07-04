@@ -129,26 +129,27 @@ export default function Canvas({
   const [uploadError, setUploadError] = useState("");
   const [videoModal, setVideoModal]   = useState<{ url: string } | null>(null);
 
+  // Selection (select tool): move/resize existing shapes, multi-select
+  const [selectedCount, setSelectedCount] = useState(0);
+
   // ── Bootstrap game ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
 
     const game = new Game(
       canvas, roomId, socket,
       (sx, sy, cx, cy) => { setTextInput({ sx, sy, cx, cy }); setTextValue(""); },
       (z) => setZoom(Math.round(z * 100)),
-      (shape) => setVideoModal({ url: shape.url })
+      (shape) => setVideoModal({ url: shape.url }),
+      (count) => setSelectedCount(count)
     );
     gameRef.current = game;
 
-    const onResize = () => {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-      game.clearCanvas();
-    };
+    // Resize (not just re-set canvas.width/height directly) so the backing buffer
+    // stays scaled to devicePixelRatio — otherwise strokes/text render blurry on
+    // high-DPI screens.
+    const onResize = () => game.resize(window.innerWidth, window.innerHeight);
     window.addEventListener("resize", onResize);
 
     return () => {
@@ -180,6 +181,17 @@ export default function Canvas({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         game?.undo();
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (game && game.getSelectedCount() > 0) {
+          e.preventDefault();
+          game.deleteSelected();
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        game?.clearSelection();
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -364,7 +376,7 @@ export default function Canvas({
                 <button
                   key={tool.id}
                   onClick={() => setSelectedTool(tool.id)}
-                  title={`${tool.label}  ${tool.shortcut}`}
+                  aria-label={`${tool.label} (${tool.shortcut})`}
                   className={[
                     "group relative flex h-8 w-8 items-center justify-center rounded-lg transition-all",
                     selectedTool === tool.id
@@ -513,7 +525,7 @@ export default function Canvas({
           <button
             onClick={() => imageInputRef.current?.click()}
             disabled={uploading !== null}
-            title="Insert image"
+            aria-label="Insert image"
             className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
           >
             {uploading === "image" ? <Loader2 className="size-[18px] animate-spin" /> : <ImagePlus className="size-[18px]" />}
@@ -524,7 +536,7 @@ export default function Canvas({
           <button
             onClick={() => videoInputRef.current?.click()}
             disabled={uploading !== null}
-            title="Insert video"
+            aria-label="Insert video"
             className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
           >
             {uploading === "video" ? <Loader2 className="size-[18px] animate-spin" /> : <Video className="size-[18px]" />}
@@ -537,7 +549,7 @@ export default function Canvas({
           <div className="mx-1 h-6 w-px bg-border/60" />
           <button
             onClick={() => gameRef.current?.undo()}
-            title="Undo  Ctrl+Z"
+            aria-label="Undo"
             className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <RotateCcw className="size-[18px]" />
@@ -624,7 +636,9 @@ export default function Canvas({
 
         {/* Theme toggle */}
         <div className="rounded-xl border border-border/60 bg-background/80 shadow-sm backdrop-blur-md">
-          <ThemeToggle />
+          {/* Explicit theme toggle wins over a manually-picked canvas background —
+              switch back to "Auto" so the whiteboard always matches light/dark mode. */}
+          <ThemeToggle onToggle={() => setCanvasColor(null)} />
         </div>
       </div>
 
@@ -667,6 +681,20 @@ export default function Canvas({
           <kbd className="font-mono">Ctrl+scroll</kbd> to zoom · <kbd className="font-mono">H</kbd> to pan
         </p>
       </div>
+
+      {/* ── Selection status (select tool) ── */}
+      {selectedCount > 0 && (
+        <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {selectedCount === 1 ? "1 shape" : `${selectedCount} shapes`} selected
+            </span>
+            {" — drag to move"}
+            {selectedCount === 1 && ", handles to resize"}
+            {" · "}<kbd className="font-mono">Del</kbd> to remove · <kbd className="font-mono">Esc</kbd> to deselect
+          </p>
+        </div>
+      )}
 
       {/* ── Text input overlay ── */}
       {textInput && (

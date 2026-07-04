@@ -3,7 +3,7 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ onToggle }: { onToggle?: () => void }) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -20,6 +20,7 @@ export default function ThemeToggle() {
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
     setIsDark(next);
+    onToggle?.();
   };
 
   return (
