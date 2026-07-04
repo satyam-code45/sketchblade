@@ -13,19 +13,22 @@ export type Tool =
   | "text"
   | "eraser";
 
-// Every shape carries an id so erases can be replayed from the DB
+// Every shape carries an id (so erases can be replayed from the DB) and an
+// optional locked flag (locked shapes can't be moved or resized).
+type BaseShape = { id?: string; locked?: boolean };
+
 export type Shape =
-  | { type: "rect";        id?: string; x: number; y: number; width: number; height: number; color?: string; fillColor?: string; strokeWidth?: number }
-  | { type: "ellipse";     id?: string; centerX: number; centerY: number; rx: number; ry: number; color?: string; fillColor?: string; strokeWidth?: number }
-  | { type: "circle";      id?: string; centerX: number; centerY: number; radius: number } // legacy
-  | { type: "diamond";     id?: string; x: number; y: number; width: number; height: number; color?: string; fillColor?: string; strokeWidth?: number }
-  | { type: "arrow";       id?: string; startX: number; startY: number; endX: number; endY: number; color?: string; strokeWidth?: number }
-  | { type: "line";        id?: string; startX: number; startY: number; endX: number; endY: number; color?: string; strokeWidth?: number }
-  | { type: "pencil";      id?: string; points: { x: number; y: number }[]; color?: string; strokeWidth?: number }
-  | { type: "highlighter"; id?: string; points: { x: number; y: number }[]; color?: string }
-  | { type: "text";        id?: string; x: number; y: number; text: string; fontSize?: number; color?: string }
-  | { type: "image";       id?: string; x: number; y: number; width: number; height: number; url: string }
-  | { type: "video";       id?: string; x: number; y: number; width: number; height: number; url: string; poster?: string };
+  | (BaseShape & { type: "rect";        x: number; y: number; width: number; height: number; color?: string; fillColor?: string; strokeWidth?: number })
+  | (BaseShape & { type: "ellipse";     centerX: number; centerY: number; rx: number; ry: number; color?: string; fillColor?: string; strokeWidth?: number })
+  | (BaseShape & { type: "circle";      centerX: number; centerY: number; radius: number }) // legacy
+  | (BaseShape & { type: "diamond";     x: number; y: number; width: number; height: number; color?: string; fillColor?: string; strokeWidth?: number })
+  | (BaseShape & { type: "arrow";       startX: number; startY: number; endX: number; endY: number; color?: string; strokeWidth?: number })
+  | (BaseShape & { type: "line";        startX: number; startY: number; endX: number; endY: number; color?: string; strokeWidth?: number })
+  | (BaseShape & { type: "pencil";      points: { x: number; y: number }[]; color?: string; strokeWidth?: number })
+  | (BaseShape & { type: "highlighter"; points: { x: number; y: number }[]; color?: string })
+  | (BaseShape & { type: "text";        x: number; y: number; text: string; fontSize?: number; color?: string })
+  | (BaseShape & { type: "image";       x: number; y: number; width: number; height: number; url: string })
+  | (BaseShape & { type: "video";       x: number; y: number; width: number; height: number; url: string; poster?: string });
 
 export type VideoShape = Extract<Shape, { type: "video" }>;
 
@@ -34,6 +37,7 @@ export interface SelectionInfo {
   hasFillable: boolean;
   hasStrokable: boolean;
   hasText: boolean;
+  allLocked: boolean;
 }
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
@@ -198,6 +202,11 @@ export class Game {
     if (!shape.id) (shape as Shape & { id: string }).id = genId();
     this.existingShapes.push(shape);
     this.history.push({ type: "add", shapeId: shape.id! });
+    // Auto-select what you just drew so style-panel tweaks (stroke width, color, fill…)
+    // apply to it immediately, without switching to the select tool first. Stays selected
+    // until you switch tools or draw the next shape (which takes over the selection).
+    this.selectedIds = new Set([shape.id!]);
+    this.emitSelectionChange();
     this.clearCanvas();
     this.broadcastShapeUpdate(shape);
   }
@@ -302,6 +311,7 @@ export class Game {
       hasFillable: shapes.some((s) => FILLABLE_TYPES.has(s.type)),
       hasStrokable: shapes.some((s) => STROKE_WIDTH_TYPES.has(s.type)),
       hasText: shapes.some((s) => s.type === "text"),
+      allLocked: shapes.length > 0 && shapes.every((s) => s.locked),
     });
   }
 
@@ -328,6 +338,24 @@ export class Game {
       roomId: Number(this.roomId),
       message: JSON.stringify({ erase: ids }),
     }));
+  }
+
+  // Toggles lock on the current selection — a locked shape can still be selected/recolored
+  // but can't be moved or resized. Toggling a mixed selection locks everything.
+  toggleLockSelected() {
+    if (this.selectedIds.size === 0) return;
+    const shapes = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
+    if (shapes.length === 0) return;
+    const shouldLock = !shapes.every((s) => s.locked);
+    const before: Shape[] = [];
+    shapes.forEach((s) => { before.push(structuredClone(s)); s.locked = shouldLock; });
+    this.history.push({ type: "update", before });
+    before.forEach((snap) => {
+      const cur = this.existingShapes.find((s) => s.id === snap.id);
+      if (cur) this.broadcastShapeUpdate(cur);
+    });
+    this.emitSelectionChange();
+    this.clearCanvas();
   }
 
   private pruneSelection() {
@@ -571,10 +599,10 @@ export class Game {
 
   // ── Selection overlay (marquee box, selection outline, resize handles) ─────
   private drawSelectionOverlay() {
-    if (this.selectedTool !== "select") return;
     const ctx = this.ctx;
 
-    if (this.dragKind === "marquee" && this.marqueeStart && this.marqueeCurrent) {
+    // Marquee-drag box only ever exists while the select tool is active.
+    if (this.selectedTool === "select" && this.dragKind === "marquee" && this.marqueeStart && this.marqueeCurrent) {
       const x = Math.min(this.marqueeStart.x, this.marqueeCurrent.x);
       const y = Math.min(this.marqueeStart.y, this.marqueeCurrent.y);
       const w = Math.abs(this.marqueeCurrent.x - this.marqueeStart.x);
@@ -589,19 +617,23 @@ export class Game {
       ctx.restore();
     }
 
+    // The selection outline itself renders regardless of active tool — a shape you
+    // just drew stays visibly selected while you tweak its style, even before
+    // switching to the select tool.
     if (this.selectedIds.size === 0) return;
     const selectedShapes = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
     if (selectedShapes.length === 0) return;
+    const isLocked = selectedShapes.every((s) => s.locked);
 
     const bounds = this.getPaddedBounds(selectedShapes);
     ctx.save();
-    ctx.strokeStyle = "#7c3aed";
+    ctx.strokeStyle = isLocked ? "#9ca3af" : "#7c3aed";
     ctx.lineWidth = 1.5 / this.zoom;
     ctx.setLineDash([5 / this.zoom, 4 / this.zoom]);
     ctx.strokeRect(bounds.minX, bounds.minY, bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
     ctx.restore();
 
-    if (selectedShapes.length === 1) {
+    if (selectedShapes.length === 1 && !isLocked) {
       const handles = this.getHandlePositions(bounds);
       const hs = 8 / this.zoom;
       ctx.save();
@@ -689,6 +721,7 @@ export class Game {
   }
 
   private translateShape(shape: Shape, dx: number, dy: number) {
+    if (shape.locked) return;
     switch (shape.type) {
       case "rect":
       case "diamond":
@@ -714,6 +747,7 @@ export class Game {
   }
 
   private scaleShapeFromAnchor(shape: Shape, anchorX: number, anchorY: number, scaleX: number, scaleY: number) {
+    if (shape.locked) return;
     const sx = (x: number) => anchorX + (x - anchorX) * scaleX;
     const sy = (y: number) => anchorY + (y - anchorY) * scaleY;
     switch (shape.type) {
@@ -859,10 +893,10 @@ export class Game {
     if (this.selectedTool === "select") {
       const c = this.toCanvas(e.clientX, e.clientY);
 
-      // 1) Resize handle? (only offered when exactly one shape is selected)
+      // 1) Resize handle? (only offered when exactly one, unlocked shape is selected)
       if (this.selectedIds.size === 1) {
         const selected = this.existingShapes.find((s) => s.id && this.selectedIds.has(s.id));
-        if (selected) {
+        if (selected && !selected.locked) {
           const bounds = this.getPaddedBounds([selected]);
           const handle = this.hitTestHandle(bounds, c);
           if (handle) {
@@ -877,10 +911,12 @@ export class Game {
       }
 
       // 2) Click inside the current selection's bounds → drag to move the group
+      // (skip if every selected shape is locked — nothing there could actually move)
       if (this.selectedIds.size > 0) {
         const selectedShapes = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
         const bounds = this.getPaddedBounds(selectedShapes);
-        if (c.x >= bounds.minX && c.x <= bounds.maxX && c.y >= bounds.minY && c.y <= bounds.maxY) {
+        const anyMovable = selectedShapes.some((s) => !s.locked);
+        if (anyMovable && c.x >= bounds.minX && c.x <= bounds.maxX && c.y >= bounds.minY && c.y <= bounds.maxY) {
           this.dragKind = "move";
           this.dragLastPoint = c;
           this.moveSnapshots = selectedShapes.map((s) => structuredClone(s));

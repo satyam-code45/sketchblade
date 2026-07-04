@@ -15,6 +15,7 @@ import {
   Highlighter,
   ImagePlus,
   Loader2,
+  Lock,
   Maximize2,
   MinusCircle,
   Minus,
@@ -25,6 +26,7 @@ import {
   RotateCcw,
   Square,
   Type,
+  Unlock,
   Video,
   X,
   ZoomIn,
@@ -103,7 +105,37 @@ const SHAPE_TOOLS: Tool[] = ["rect", "diamond", "ellipse", "arrow", "line", "pen
 const FILL_TOOLS: Tool[] = ["rect", "diamond", "ellipse"];
 const STROKE_WIDTH_TOOLS: Tool[] = ["rect", "diamond", "ellipse", "arrow", "line", "pencil"];
 
-const EMPTY_SELECTION: SelectionInfo = { count: 0, hasFillable: false, hasStrokable: false, hasText: false };
+const EMPTY_SELECTION: SelectionInfo = { count: 0, hasFillable: false, hasStrokable: false, hasText: false, allLocked: false };
+
+const HEX_RE = /^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/;
+
+// A typed hex code, so picking a precise color doesn't always require opening
+// the browser's native (visually jarring, out-of-theme) color picker dialog.
+function HexColorInput({ value, onCommit }: { value: string; onCommit: (hex: string) => void }) {
+  const [text, setText] = useState(value.replace(/^#/, ""));
+  useEffect(() => setText(value.replace(/^#/, "")), [value]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    if (HEX_RE.test(trimmed)) onCommit(`#${trimmed}`);
+    else setText(value.replace(/^#/, "")); // invalid — revert
+  };
+
+  return (
+    <div className="flex h-6 flex-1 items-center gap-1 rounded-md border border-border/60 bg-background px-1.5">
+      <span className="text-[11px] text-muted-foreground">#</span>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        placeholder="7c3aed"
+        maxLength={6}
+        className="w-full min-w-0 bg-transparent font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/50"
+      />
+    </div>
+  );
+}
 
 export default function Canvas({
   roomId,
@@ -241,7 +273,10 @@ export default function Canvas({
         return;
       }
       if (e.key === "Escape") {
-        game?.clearSelection();
+        // On any drawing tool, Escape backs out to Select (matches "Esc = pointer mode").
+        // Already on Select — Escape just clears whatever's selected.
+        if (selectedTool !== "select") setSelectedTool("select");
+        else game?.clearSelection();
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -259,7 +294,7 @@ export default function Canvas({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [textInput]);
+  }, [textInput, selectedTool]);
 
   // ── Focus textarea when it appears ─────────────────────────────────────
   useEffect(() => {
@@ -425,24 +460,25 @@ export default function Canvas({
               />
             ))}
           </div>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-1.5">
             <input
               type="color"
               value={color ?? "#7c3aed"}
               onChange={(e) => setColor(e.target.value)}
-              className="h-6 w-6 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+              className="h-6 w-6 shrink-0 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
               title="Custom color"
             />
-            <button
-              onClick={() => setColor(null)}
-              className={[
-                "flex-1 rounded-md px-2 py-1 text-[11px] transition-colors",
-                color === null ? "bg-violet-600/10 text-violet-500" : "text-muted-foreground hover:bg-accent hover:text-foreground",
-              ].join(" ")}
-            >
-              Auto
-            </button>
+            <HexColorInput value={color ?? "#7c3aed"} onCommit={setColor} />
           </div>
+          <button
+            onClick={() => setColor(null)}
+            className={[
+              "mt-1.5 w-full rounded-md px-2 py-1 text-[11px] transition-colors",
+              color === null ? "bg-violet-600/10 text-violet-500" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            ].join(" ")}
+          >
+            Auto (theme)
+          </button>
 
           {/* Fill (background) — only for closed shapes */}
           {showFill && (
@@ -473,18 +509,19 @@ export default function Canvas({
                   />
                 ))}
               </div>
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex items-center gap-1.5">
                 <input
                   type="color"
                   value={fillColor ?? "#7c3aed"}
                   onChange={(e) => setFillColor(e.target.value)}
-                  className="h-6 w-6 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+                  className="h-6 w-6 shrink-0 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
                   title="Custom fill"
                 />
-                <span className="flex-1 text-[11px] text-muted-foreground">
-                  {fillColor ? "Filled" : "Transparent"}
-                </span>
+                <HexColorInput value={fillColor ?? "#7c3aed"} onCommit={setFillColor} />
               </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {fillColor ? "Filled" : "Transparent"}
+              </p>
             </>
           )}
 
@@ -608,26 +645,27 @@ export default function Canvas({
                     />
                   ))}
                 </div>
-                <div className="mt-2.5 flex items-center gap-2">
+                <div className="mt-2.5 flex items-center gap-1.5">
                   <input
                     type="color"
                     value={canvasColor ?? "#f8f9fa"}
                     onChange={(e) => setCanvasColor(e.target.value)}
-                    className="h-7 w-7 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+                    className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
                     title="Custom background"
                   />
-                  <button
-                    onClick={() => setCanvasColor(null)}
-                    className={[
-                      "flex-1 rounded-md px-2 py-1 text-[11px] transition-colors",
-                      canvasColor === null
-                        ? "bg-violet-600/10 text-violet-500"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    Auto (theme)
-                  </button>
+                  <HexColorInput value={canvasColor ?? "#f8f9fa"} onCommit={setCanvasColor} />
                 </div>
+                <button
+                  onClick={() => setCanvasColor(null)}
+                  className={[
+                    "mt-2 w-full rounded-md px-2 py-1 text-[11px] transition-colors",
+                    canvasColor === null
+                      ? "bg-violet-600/10 text-violet-500"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  ].join(" ")}
+                >
+                  Auto (theme)
+                </button>
               </div>
             )}
           </div>
@@ -796,15 +834,34 @@ export default function Canvas({
 
       {/* ── Selection status (select tool) ── */}
       {selection.count > 0 && (
-        <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
+        <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
           <p className="text-[11px] text-muted-foreground">
             <span className="font-medium text-foreground">
               {selection.count === 1 ? "1 shape" : `${selection.count} shapes`} selected
             </span>
-            {" — drag to move"}
-            {selection.count === 1 && ", handles to resize"}
+            {selection.allLocked ? (
+              " — locked"
+            ) : (
+              <>
+                {" — drag to move"}
+                {selection.count === 1 && ", handles to resize"}
+              </>
+            )}
             {" · "}<kbd className="font-mono">Del</kbd> to remove · <kbd className="font-mono">Esc</kbd> to deselect
           </p>
+          <div className="h-4 w-px bg-border/60" />
+          <button
+            onClick={() => gameRef.current?.toggleLockSelected()}
+            title={selection.allLocked ? "Unlock" : "Lock"}
+            className={[
+              "flex h-6 w-6 items-center justify-center rounded-md transition-colors",
+              selection.allLocked
+                ? "bg-violet-600/10 text-violet-500"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            ].join(" ")}
+          >
+            {selection.allLocked ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
+          </button>
         </div>
       )}
 

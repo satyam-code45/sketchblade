@@ -45,15 +45,17 @@ function checkUser(token: string): string | null {
 }
 
 function broadcastPresence(roomId: string) {
-  const roomUsers = users.filter((u) => u.rooms.includes(roomId));
+  // Reconnects (page reload, a dropped connection retrying) can leave a stale
+  // entry in `users` briefly overlapping with the new one — dedupe by userId
+  // so the same person never shows up twice in the presence list.
+  const roomUsers = users.filter((u) => u.rooms.includes(roomId) && u.ws.readyState === WebSocket.OPEN);
+  const uniqueByUser = Array.from(new Map(roomUsers.map((u) => [u.userId, u])).values());
   const payload = JSON.stringify({
     type: "presence",
     roomId,
-    users: roomUsers.map((u) => ({ userId: u.userId, name: u.name })),
+    users: uniqueByUser.map((u) => ({ userId: u.userId, name: u.name })),
   });
-  roomUsers.forEach((u) => {
-    if (u.ws.readyState === WebSocket.OPEN) u.ws.send(payload);
-  });
+  roomUsers.forEach((u) => u.ws.send(payload));
 }
 
 wss.on("connection", function connection(ws, request) {
