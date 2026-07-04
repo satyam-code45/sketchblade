@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { RefreshCw, Wifi } from "lucide-react";
@@ -12,15 +12,10 @@ interface OnlineUser {
   name: string;
 }
 
-// The health endpoint lives on the WS server's HTTP port (see apps/ws-backend).
-const HEALTH_URL = WS_URL.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://") + "/health";
-
-const POLL_INTERVAL_MS = 3000;
-const HEALTH_TIMEOUT_MS = 5000;
 // If the socket closes faster than this after opening, treat it as a real failure
-// (bad token, server rejecting the connection) rather than a random network blip.
+// (bad token, cold server rejecting the handshake, etc.) rather than a random blip.
 const QUICK_FAILURE_MS = 2000;
-const MAX_QUICK_FAILURES = 5;
+const MAX_QUICK_FAILURES = 6;
 
 export function RoomCanvas({ roomId }: { roomId: string }) {
   const router = useRouter();
@@ -28,50 +23,23 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
   const [roomInfo, setRoomInfo]       = useState<RoomInfo | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
-  // Render's free tier spins the WS server down when idle — poll /health
-  // before opening the real socket so we can show a helpful message instead
-  // of a spinner that never resolves.
-  const [serverAwake, setServerAwake] = useState(false);
-  const [waking, setWaking]           = useState(false);
-  const [retryNonce, setRetryNonce]   = useState(0);
-
-  // Guards against a tight reconnect loop: if the socket keeps closing right
-  // after opening (auth issue, server rejecting it, etc.), retrying instantly
-  // and forever just hammers the server and never actually connects.
-  const [, setQuickFailures] = useState(0);
-  const [gaveUp, setGaveUp]  = useState(false);
-
-  useEffect(() => {
-    if (serverAwake) return; // already up — nothing to poll
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const check = async () => {
-      const controller = new AbortController();
-      const abortTimer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
-      try {
-        const res = await fetch(HEALTH_URL, { cache: "no-store", signal: controller.signal });
-        clearTimeout(abortTimer);
-        if (!cancelled && res.ok) { setServerAwake(true); return; }
-      } catch {
-        clearTimeout(abortTimer);
-      }
-      if (cancelled) return;
-      setWaking(true);
-      timer = setTimeout(check, POLL_INTERVAL_MS);
-    };
-
-    check();
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [retryNonce, serverAwake]);
+  // Connect straight to the WebSocket with retry/backoff — deliberately NOT gated
+  // behind a separate /health polling fetch. Brave Shields (and some ad-blockers)
+  // silently block a repeating fetch to the same third-party URL as a tracking-beacon
+  // pattern, which left Brave users stuck forever waiting on a check that could never
+  // pass, even though the real WebSocket connection would have worked fine. The
+  // WebSocket itself is what actually matters, so we just retry that directly.
+  const [connectGen, setConnectGen] = useState(0);
+  const [hasFailedOnce, setHasFailedOnce] = useState(false);
+  const [gaveUp, setGaveUp]         = useState(false);
+  const failureStreakRef = useRef(0);
+  const backoffTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!serverAwake || gaveUp) return;
+    if (gaveUp) return;
 
     const token    = localStorage.getItem("token");
     const userName = localStorage.getItem("userName") ?? "Anonymous";
-
     if (!token) { router.push("/sign-in"); return; }
 
     // Fetch room info for the canvas header
@@ -87,13 +55,13 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
       const msg = JSON.parse(event.data);
       if (msg.type === "presence") setOnlineUsers(msg.users ?? []);
     };
-
     ws.addEventListener("message", presenceHandler);
 
     ws.onopen = () => {
       openedAt = Date.now();
+      failureStreakRef.current = 0;
+      setHasFailedOnce(false);
       setSocket(ws);
-      setQuickFailures(0); // a real connection succeeded — reset the failure guard
       ws.send(JSON.stringify({ type: "join_room", roomId, name: userName }));
     };
 
@@ -103,25 +71,36 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
 
       const closedQuickly = openedAt === 0 || Date.now() - openedAt < QUICK_FAILURE_MS;
       if (!closedQuickly) {
-        // Was connected for a while, then dropped — a normal blip, just reconnect.
-        setServerAwake(false);
+        // Was connected for a while, then dropped — a normal blip, reconnect right away.
+        failureStreakRef.current = 0;
+        setConnectGen((g) => g + 1);
         return;
       }
 
-      setQuickFailures((n) => {
-        const next = n + 1;
-        if (next >= MAX_QUICK_FAILURES) {
-          setGaveUp(true);
-        } else {
-          // Back off so a persistent problem doesn't hammer the server in a tight loop.
-          setTimeout(() => setServerAwake(false), Math.min(1000 * 2 ** next, 8000));
-        }
-        return next;
-      });
+      setHasFailedOnce(true);
+      failureStreakRef.current += 1;
+      if (failureStreakRef.current >= MAX_QUICK_FAILURES) {
+        setGaveUp(true);
+        return;
+      }
+      const delay = Math.min(1000 * 2 ** failureStreakRef.current, 8000);
+      backoffTimerRef.current = setTimeout(() => setConnectGen((g) => g + 1), delay);
     };
 
-    return () => { intentionalClose = true; ws.close(); };
-  }, [serverAwake, gaveUp, roomId, router]);
+    return () => {
+      intentionalClose = true;
+      ws.close();
+      if (backoffTimerRef.current) { clearTimeout(backoffTimerRef.current); backoffTimerRef.current = null; }
+    };
+  }, [connectGen, gaveUp, roomId, router]);
+
+  const retryNow = () => {
+    if (backoffTimerRef.current) { clearTimeout(backoffTimerRef.current); backoffTimerRef.current = null; }
+    failureStreakRef.current = 0;
+    setHasFailedOnce(false);
+    setGaveUp(false);
+    setConnectGen((g) => g + 1);
+  };
 
   if (gaveUp) {
     return (
@@ -137,7 +116,7 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
           </p>
           <div className="mt-5 flex justify-center gap-2">
             <button
-              onClick={() => { setQuickFailures(0); setGaveUp(false); setServerAwake(false); }}
+              onClick={retryNow}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <RefreshCw className="size-3.5" />
@@ -155,7 +134,7 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
     );
   }
 
-  if (!serverAwake || !socket) {
+  if (!socket) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background/95 p-6 text-center shadow-xl backdrop-blur-md">
@@ -164,7 +143,7 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
           </div>
           <h2 className="text-base font-semibold">Connecting to room…</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {waking
+            {hasFailedOnce
               ? "Our realtime server is waking up — this can take up to a minute on the free tier. Hang tight, you'll be dropped in automatically."
               : "Checking connection…"}
           </p>
@@ -177,9 +156,9 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
               />
             ))}
           </div>
-          {waking && (
+          {hasFailedOnce && (
             <button
-              onClick={() => setRetryNonce((n) => n + 1)}
+              onClick={retryNow}
               className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <RefreshCw className="size-3.5" />
