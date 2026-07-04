@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowRight,
+  Ban,
   Check,
   Circle,
   Copy,
@@ -29,7 +30,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Game, Tool, Shape } from "@/draw";
+import { Game, Tool, Shape, SelectionInfo } from "@/draw";
 import { uploadToCloudinary, cloudinaryVideoPoster } from "@/lib/cloudinary";
 import ThemeToggle from "./ThemeToggle";
 import React from "react";
@@ -82,10 +83,27 @@ const DRAW_COLOR_SWATCHES = [
   "#0284c7", "#db2777", "#000000", "#ffffff",
 ];
 
+const FILL_COLOR_SWATCHES = [
+  "#ede9fe", "#fee2e2", "#fef3c7", "#dcfce7",
+  "#dbeafe", "#fce7f3", "#f1f5f9", "#7c3aed",
+];
+
 const BG_COLOR_SWATCHES = [
   "#ffffff", "#f8f9fa", "#f4f1ea", "#eef2ff",
   "#0f172a", "#1e1e2e", "#111827", "#052e16",
 ];
+
+const STROKE_WIDTH_OPTIONS = [
+  { label: "Thin", value: 1.5 },
+  { label: "Medium", value: 3 },
+  { label: "Thick", value: 6 },
+];
+
+const SHAPE_TOOLS: Tool[] = ["rect", "diamond", "ellipse", "arrow", "line", "pencil", "highlighter", "text"];
+const FILL_TOOLS: Tool[] = ["rect", "diamond", "ellipse"];
+const STROKE_WIDTH_TOOLS: Tool[] = ["rect", "diamond", "ellipse", "arrow", "line", "pencil"];
+
+const EMPTY_SELECTION: SelectionInfo = { count: 0, hasFillable: false, hasStrokable: false, hasText: false };
 
 export default function Canvas({
   roomId,
@@ -114,13 +132,16 @@ export default function Canvas({
   } | null>(null);
   const [textValue, setTextValue] = useState("");
 
-  // Style: stroke/fill/text color + canvas background + font size
-  // (null = follow theme default)
+  // Style: stroke/fill/text color + stroke width + font size (null = follow theme default)
   const [color, setColor]             = useState<string | null>(null);
-  const [canvasColor, setCanvasColor] = useState<string | null>(null);
-  const [colorOpen, setColorOpen]     = useState(false);
-  const colorRef                      = useRef<HTMLDivElement>(null);
+  const [fillColor, setFillColor]     = useState<string | null>(null);
+  const [strokeWidth, setStrokeWidth] = useState(2);
   const [fontSize, setFontSize]       = useState(20);
+
+  // Canvas background — separate from shape style, lives in its own small popover
+  const [canvasColor, setCanvasColor]     = useState<string | null>(null);
+  const [canvasColorOpen, setCanvasColorOpen] = useState(false);
+  const canvasColorRef                    = useRef<HTMLDivElement>(null);
 
   // Image / video insert via Cloudinary
   const imageInputRef             = useRef<HTMLInputElement>(null);
@@ -130,7 +151,7 @@ export default function Canvas({
   const [videoModal, setVideoModal]   = useState<{ url: string } | null>(null);
 
   // Selection (select tool): move/resize existing shapes, multi-select
-  const [selectedCount, setSelectedCount] = useState(0);
+  const [selection, setSelection] = useState<SelectionInfo>(EMPTY_SELECTION);
 
   // ── Bootstrap game ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -142,7 +163,7 @@ export default function Canvas({
       (sx, sy, cx, cy) => { setTextInput({ sx, sy, cx, cy }); setTextValue(""); },
       (z) => setZoom(Math.round(z * 100)),
       (shape) => setVideoModal({ url: shape.url }),
-      (count) => setSelectedCount(count)
+      (info) => setSelection(info)
     );
     gameRef.current = game;
 
@@ -162,6 +183,8 @@ export default function Canvas({
   // Sync tool/style into game
   useEffect(() => { gameRef.current?.setTool(selectedTool); }, [selectedTool]);
   useEffect(() => { gameRef.current?.setColor(color); }, [color]);
+  useEffect(() => { gameRef.current?.setFillColor(fillColor); }, [fillColor]);
+  useEffect(() => { gameRef.current?.setStrokeWidth(strokeWidth); }, [strokeWidth]);
   useEffect(() => { gameRef.current?.setFontSize(fontSize); }, [fontSize]);
   useEffect(() => { gameRef.current?.setCanvasColor(canvasColor); }, [canvasColor]);
 
@@ -171,6 +194,33 @@ export default function Canvas({
     observer.observe(document.documentElement, { attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, []);
+
+  // ── Text commit / dismiss ────────────────────────────────────────────────
+  // commit=true saves non-empty text; either way the overlay closes. Used by Enter,
+  // blur, Escape, and switching tools — a stray empty box should never linger on screen.
+  const closeTextInput = useCallback((commit: boolean) => {
+    const game = gameRef.current;
+    if (commit && textInput && textValue.trim() && game) {
+      game.addShape({
+        type: "text",
+        x: textInput.cx,
+        y: textInput.cy,
+        text: textValue.trim(),
+        fontSize,
+        color: color ?? undefined,
+      } as Shape);
+    }
+    setTextInput(null);
+    setTextValue("");
+  }, [textInput, textValue, fontSize, color]);
+
+  const closeTextInputRef = useRef(closeTextInput);
+  closeTextInputRef.current = closeTextInput;
+
+  // Switching tools (including via a toolbar click) always dismisses any pending text box.
+  useEffect(() => {
+    if (selectedTool !== "text") closeTextInputRef.current(true);
+  }, [selectedTool]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
@@ -231,34 +281,17 @@ export default function Canvas({
     return () => document.removeEventListener("mousedown", handler);
   }, [presenceOpen]);
 
-  // ── Color popover: close on outside click ───────────────────────────────
+  // ── Canvas background popover: close on outside click ───────────────────
   useEffect(() => {
-    if (!colorOpen) return;
+    if (!canvasColorOpen) return;
     const handler = (e: MouseEvent) => {
-      if (colorRef.current && !colorRef.current.contains(e.target as Node)) {
-        setColorOpen(false);
+      if (canvasColorRef.current && !canvasColorRef.current.contains(e.target as Node)) {
+        setCanvasColorOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [colorOpen]);
-
-  // ── Text commit ─────────────────────────────────────────────────────────
-  const commitText = useCallback(() => {
-    const game = gameRef.current;
-    if (textInput && textValue.trim() && game) {
-      game.addShape({
-        type: "text",
-        x: textInput.cx,
-        y: textInput.cy,
-        text: textValue.trim(),
-        fontSize,
-        color: color ?? undefined,
-      } as Shape);
-    }
-    setTextInput(null);
-    setTextValue("");
-  }, [textInput, textValue, fontSize, color]);
+  }, [canvasColorOpen]);
 
   // ── Image / video insert (Cloudinary) ───────────────────────────────────
   const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -322,6 +355,13 @@ export default function Canvas({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // ── Contextual style panel visibility (which sections make sense right now) ──
+  const isSelecting     = selectedTool === "select" && selection.count > 0;
+  const showStylePanel  = SHAPE_TOOLS.includes(selectedTool) || isSelecting;
+  const showFill        = FILL_TOOLS.includes(selectedTool) || (isSelecting && selection.hasFillable);
+  const showStrokeWidth = STROKE_WIDTH_TOOLS.includes(selectedTool) || (isSelecting && selection.hasStrokable);
+  const showFontSize    = selectedTool === "text" || (isSelecting && selection.hasText);
+
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="relative h-screen w-screen overflow-hidden">
@@ -366,6 +406,143 @@ export default function Canvas({
         </div>
       </div>
 
+      {/* ── Left: contextual style panel (Excalidraw-style) ── */}
+      {showStylePanel && (
+        <div className="absolute left-4 top-24 z-20 w-52 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border border-border/60 bg-background/90 p-3 shadow-lg backdrop-blur-md">
+          {/* Stroke color */}
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stroke</p>
+          <div className="grid grid-cols-8 gap-1.5">
+            {DRAW_COLOR_SWATCHES.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                title={c}
+                className={[
+                  "size-5 rounded-full border shadow-sm transition-transform hover:scale-110",
+                  color === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                ].join(" ")}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="color"
+              value={color ?? "#7c3aed"}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-6 w-6 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+              title="Custom color"
+            />
+            <button
+              onClick={() => setColor(null)}
+              className={[
+                "flex-1 rounded-md px-2 py-1 text-[11px] transition-colors",
+                color === null ? "bg-violet-600/10 text-violet-500" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              ].join(" ")}
+            >
+              Auto
+            </button>
+          </div>
+
+          {/* Fill (background) — only for closed shapes */}
+          {showFill && (
+            <>
+              <div className="my-3 h-px bg-border/40" />
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fill</p>
+              <div className="grid grid-cols-8 gap-1.5">
+                <button
+                  onClick={() => setFillColor(null)}
+                  title="Transparent"
+                  className={[
+                    "flex size-5 items-center justify-center rounded-full border shadow-sm transition-transform hover:scale-110",
+                    fillColor === null ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                  ].join(" ")}
+                >
+                  <Ban className="size-3 text-muted-foreground" />
+                </button>
+                {FILL_COLOR_SWATCHES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setFillColor(c)}
+                    title={c}
+                    className={[
+                      "size-5 rounded-full border shadow-sm transition-transform hover:scale-110",
+                      fillColor === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                    ].join(" ")}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="color"
+                  value={fillColor ?? "#7c3aed"}
+                  onChange={(e) => setFillColor(e.target.value)}
+                  className="h-6 w-6 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+                  title="Custom fill"
+                />
+                <span className="flex-1 text-[11px] text-muted-foreground">
+                  {fillColor ? "Filled" : "Transparent"}
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Stroke width */}
+          {showStrokeWidth && (
+            <>
+              <div className="my-3 h-px bg-border/40" />
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stroke width</p>
+              <div className="flex gap-1.5">
+                {STROKE_WIDTH_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setStrokeWidth(opt.value)}
+                    title={opt.label}
+                    className={[
+                      "flex h-8 flex-1 items-center justify-center rounded-lg border transition-colors",
+                      strokeWidth === opt.value
+                        ? "border-violet-500 bg-violet-600/10"
+                        : "border-border/60 hover:bg-accent",
+                    ].join(" ")}
+                  >
+                    <span
+                      className="block w-6 rounded-full bg-foreground"
+                      style={{ height: opt.value }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Font size — only for text */}
+          {showFontSize && (
+            <>
+              <div className="my-3 h-px bg-border/40" />
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Font size</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setFontSize((f) => Math.max(10, f - 4))}
+                  aria-label="Decrease font size"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  <MinusCircle className="size-[18px]" />
+                </button>
+                <span className="min-w-[24px] flex-1 text-center font-mono text-xs text-muted-foreground">{fontSize}</span>
+                <button
+                  onClick={() => setFontSize((f) => Math.min(96, f + 4))}
+                  aria-label="Increase font size"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  <PlusCircle className="size-[18px]" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Center: tool palette ── */}
       <div className="absolute left-1/2 top-4 z-20 -translate-x-1/2">
         <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/90 p-1.5 shadow-lg backdrop-blur-md">
@@ -395,70 +572,25 @@ export default function Canvas({
             </React.Fragment>
           ))}
 
-          {/* Color picker — draw/text color + canvas background */}
+          {/* Canvas background — independent of tool/selection */}
           <div className="mx-1 h-6 w-px bg-border/60" />
-          <div ref={colorRef} className="relative">
+          <div ref={canvasColorRef} className="relative">
             <button
-              onClick={() => setColorOpen((v) => !v)}
-              title="Colors"
+              onClick={() => setCanvasColorOpen((v) => !v)}
+              aria-label="Canvas background"
               className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             >
-              {color ? (
-                <span className="size-[16px] rounded-full border border-border/60 shadow-sm" style={{ backgroundColor: color }} />
+              {canvasColor ? (
+                <span className="size-[16px] rounded-full border border-border/60 shadow-sm" style={{ backgroundColor: canvasColor }} />
               ) : (
                 <Palette className="size-[18px]" />
               )}
-              {canvasColor && (
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 size-[9px] rounded-full border-2 border-background shadow-sm"
-                  style={{ backgroundColor: canvasColor }}
-                />
-              )}
+              <span className="pointer-events-none absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-foreground shadow-md opacity-0 transition-opacity group-hover:opacity-100 backdrop-blur-sm">
+                Canvas background
+              </span>
             </button>
-            {colorOpen && (
-              <div className="absolute left-1/2 top-full mt-2 w-60 -translate-x-1/2 rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
-                {/* Draw & text color */}
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Draw &amp; text color
-                </p>
-                <div className="grid grid-cols-8 gap-1.5">
-                  {DRAW_COLOR_SWATCHES.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setColor(c)}
-                      title={c}
-                      className={[
-                        "size-6 rounded-full border shadow-sm transition-transform hover:scale-110",
-                        color === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
-                      ].join(" ")}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2.5 flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={color ?? "#7c3aed"}
-                    onChange={(e) => setColor(e.target.value)}
-                    className="h-7 w-7 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
-                    title="Custom color"
-                  />
-                  <button
-                    onClick={() => setColor(null)}
-                    className={[
-                      "flex-1 rounded-md px-2 py-1 text-[11px] transition-colors",
-                      color === null
-                        ? "bg-violet-600/10 text-violet-500"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    Auto (theme)
-                  </button>
-                </div>
-
-                <div className="my-3 h-px bg-border/40" />
-
-                {/* Canvas background */}
+            {canvasColorOpen && (
+              <div className="absolute left-1/2 top-full mt-2 w-56 -translate-x-1/2 rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Canvas background
                 </p>
@@ -499,26 +631,6 @@ export default function Canvas({
               </div>
             )}
           </div>
-
-          {/* Font size (applies to next text you place) */}
-          <div className="mx-1 h-6 w-px bg-border/60" />
-          <button
-            onClick={() => setFontSize((f) => Math.max(10, f - 4))}
-            title="Decrease font size"
-            className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          >
-            <MinusCircle className="size-[18px]" />
-          </button>
-          <span className="min-w-[28px] text-center font-mono text-xs text-muted-foreground" title="Text font size">
-            {fontSize}
-          </span>
-          <button
-            onClick={() => setFontSize((f) => Math.min(96, f + 4))}
-            title="Increase font size"
-            className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          >
-            <PlusCircle className="size-[18px]" />
-          </button>
 
           {/* Insert: image / video (uploaded to Cloudinary) */}
           <div className="mx-1 h-6 w-px bg-border/60" />
@@ -683,14 +795,14 @@ export default function Canvas({
       </div>
 
       {/* ── Selection status (select tool) ── */}
-      {selectedCount > 0 && (
+      {selection.count > 0 && (
         <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
           <p className="text-[11px] text-muted-foreground">
             <span className="font-medium text-foreground">
-              {selectedCount === 1 ? "1 shape" : `${selectedCount} shapes`} selected
+              {selection.count === 1 ? "1 shape" : `${selection.count} shapes`} selected
             </span>
             {" — drag to move"}
-            {selectedCount === 1 && ", handles to resize"}
+            {selection.count === 1 && ", handles to resize"}
             {" · "}<kbd className="font-mono">Del</kbd> to remove · <kbd className="font-mono">Esc</kbd> to deselect
           </p>
         </div>
@@ -710,14 +822,10 @@ export default function Canvas({
           value={textValue}
           onChange={(e) => setTextValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitText(); }
-            if (e.key === "Escape") { setTextInput(null); setTextValue(""); }
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); closeTextInput(true); }
+            if (e.key === "Escape") closeTextInput(false);
           }}
-          onBlur={() => {
-            // Only auto-commit on blur if the user has typed something
-            if (textValue.trim()) commitText();
-            // If empty, leave it open so the user can still type after clicking back
-          }}
+          onBlur={() => closeTextInput(true)}
         />
       )}
 

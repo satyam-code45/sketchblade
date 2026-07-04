@@ -15,19 +15,26 @@ export type Tool =
 
 // Every shape carries an id so erases can be replayed from the DB
 export type Shape =
-  | { type: "rect";        id?: string; x: number; y: number; width: number; height: number; color?: string }
-  | { type: "ellipse";     id?: string; centerX: number; centerY: number; rx: number; ry: number; color?: string }
+  | { type: "rect";        id?: string; x: number; y: number; width: number; height: number; color?: string; fillColor?: string; strokeWidth?: number }
+  | { type: "ellipse";     id?: string; centerX: number; centerY: number; rx: number; ry: number; color?: string; fillColor?: string; strokeWidth?: number }
   | { type: "circle";      id?: string; centerX: number; centerY: number; radius: number } // legacy
-  | { type: "diamond";     id?: string; x: number; y: number; width: number; height: number; color?: string }
-  | { type: "arrow";       id?: string; startX: number; startY: number; endX: number; endY: number; color?: string }
-  | { type: "line";        id?: string; startX: number; startY: number; endX: number; endY: number; color?: string }
-  | { type: "pencil";      id?: string; points: { x: number; y: number }[]; color?: string }
+  | { type: "diamond";     id?: string; x: number; y: number; width: number; height: number; color?: string; fillColor?: string; strokeWidth?: number }
+  | { type: "arrow";       id?: string; startX: number; startY: number; endX: number; endY: number; color?: string; strokeWidth?: number }
+  | { type: "line";        id?: string; startX: number; startY: number; endX: number; endY: number; color?: string; strokeWidth?: number }
+  | { type: "pencil";      id?: string; points: { x: number; y: number }[]; color?: string; strokeWidth?: number }
   | { type: "highlighter"; id?: string; points: { x: number; y: number }[]; color?: string }
   | { type: "text";        id?: string; x: number; y: number; text: string; fontSize?: number; color?: string }
   | { type: "image";       id?: string; x: number; y: number; width: number; height: number; url: string }
   | { type: "video";       id?: string; x: number; y: number; width: number; height: number; url: string; poster?: string };
 
 export type VideoShape = Extract<Shape, { type: "video" }>;
+
+export interface SelectionInfo {
+  count: number;
+  hasFillable: boolean;
+  hasStrokable: boolean;
+  hasText: boolean;
+}
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
@@ -47,6 +54,10 @@ const CURSOR_FOR_HANDLE: Record<HandleId, string> = {
 
 // Shape kinds that carry a stroke/text `color` field
 const COLORABLE_TYPES = new Set<Shape["type"]>(["rect", "ellipse", "diamond", "arrow", "line", "pencil", "highlighter", "text"]);
+// Closed shapes that can be filled with a background color
+const FILLABLE_TYPES = new Set<Shape["type"]>(["rect", "ellipse", "diamond"]);
+// Shapes with an adjustable stroke/border width
+const STROKE_WIDTH_TYPES = new Set<Shape["type"]>(["rect", "ellipse", "diamond", "arrow", "line", "pencil"]);
 
 const genId = () => Math.random().toString(36).slice(2, 10);
 
@@ -103,6 +114,8 @@ export class Game {
 
   // Style state applied to newly-created shapes
   private currentColor: string | null = null; // null = follow theme default
+  private currentFillColor: string | null = null; // null = transparent
+  private currentStrokeWidth = 2;
   private currentFontSize = 20;
   private canvasColor: string | null = null; // null = follow theme default background
   private imageCache: Map<string, HTMLImageElement> = new Map();
@@ -110,7 +123,7 @@ export class Game {
   private onTextRequest?: (sx: number, sy: number, cx: number, cy: number) => void;
   private onZoomChange?: (zoom: number) => void;
   private onVideoOpen?: (shape: VideoShape) => void;
-  private onSelectionChange?: (count: number) => void;
+  private onSelectionChange?: (info: SelectionInfo) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -119,7 +132,7 @@ export class Game {
     onTextRequest?: (sx: number, sy: number, cx: number, cy: number) => void,
     onZoomChange?: (zoom: number) => void,
     onVideoOpen?: (shape: VideoShape) => void,
-    onSelectionChange?: (count: number) => void
+    onSelectionChange?: (info: SelectionInfo) => void
   ) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d")!;
@@ -226,15 +239,16 @@ export class Game {
   }
 
   // ── Style controls ──────────────────────────────────────────────────────
-  setColor(color: string | null) {
-    this.currentColor = color;
-    // If something's selected, apply the change to it too — not just future shapes.
+  // Applies a mutation to every currently-selected shape of an allowed type — used so
+  // picking a style (color/fill/width/font size) affects an active selection immediately,
+  // not just shapes drawn afterward. Pushes one undo entry and broadcasts each change.
+  private applyStyleToSelection(allowedTypes: Set<Shape["type"]>, mutate: (s: Shape) => void) {
     if (this.selectedIds.size === 0) return;
     const before: Shape[] = [];
     this.existingShapes.forEach((s) => {
-      if (s.id && this.selectedIds.has(s.id) && COLORABLE_TYPES.has(s.type)) {
+      if (s.id && this.selectedIds.has(s.id) && allowedTypes.has(s.type)) {
         before.push(structuredClone(s));
-        (s as Shape & { color?: string }).color = color ?? undefined;
+        mutate(s);
       }
     });
     if (before.length === 0) return;
@@ -245,9 +259,31 @@ export class Game {
     });
     this.clearCanvas();
   }
+
+  setColor(color: string | null) {
+    this.currentColor = color;
+    this.applyStyleToSelection(COLORABLE_TYPES, (s) => { (s as Shape & { color?: string }).color = color ?? undefined; });
+  }
   getColor() { return this.currentColor; }
 
-  setFontSize(size: number) { this.currentFontSize = Math.min(96, Math.max(10, size)); }
+  setFillColor(color: string | null) {
+    this.currentFillColor = color;
+    this.applyStyleToSelection(FILLABLE_TYPES, (s) => { (s as Shape & { fillColor?: string }).fillColor = color ?? undefined; });
+  }
+  getFillColor() { return this.currentFillColor; }
+
+  setStrokeWidth(width: number) {
+    this.currentStrokeWidth = Math.min(20, Math.max(1, width));
+    const w = this.currentStrokeWidth;
+    this.applyStyleToSelection(STROKE_WIDTH_TYPES, (s) => { (s as Shape & { strokeWidth?: number }).strokeWidth = w; });
+  }
+  getStrokeWidth() { return this.currentStrokeWidth; }
+
+  setFontSize(size: number) {
+    this.currentFontSize = Math.min(96, Math.max(10, size));
+    const fs = this.currentFontSize;
+    this.applyStyleToSelection(new Set<Shape["type"]>(["text"]), (s) => { (s as Extract<Shape, { type: "text" }>).fontSize = fs; });
+  }
   increaseFontSize() { this.setFontSize(this.currentFontSize + 4); }
   decreaseFontSize() { this.setFontSize(this.currentFontSize - 4); }
   getFontSize() { return this.currentFontSize; }
@@ -258,11 +294,22 @@ export class Game {
   // ── Selection ─────────────────────────────────────────────────────────────
   getSelectedCount() { return this.selectedIds.size; }
 
+  private emitSelectionChange() {
+    if (!this.onSelectionChange) return;
+    const shapes = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
+    this.onSelectionChange({
+      count: this.selectedIds.size,
+      hasFillable: shapes.some((s) => FILLABLE_TYPES.has(s.type)),
+      hasStrokable: shapes.some((s) => STROKE_WIDTH_TYPES.has(s.type)),
+      hasText: shapes.some((s) => s.type === "text"),
+    });
+  }
+
   clearSelection() {
     if (this.selectedIds.size === 0 && this.dragKind === "none") return;
     this.selectedIds.clear();
     this.dragKind = "none";
-    this.onSelectionChange?.(0);
+    this.emitSelectionChange();
     this.clearCanvas();
   }
 
@@ -274,7 +321,7 @@ export class Game {
     this.existingShapes = this.existingShapes.filter((s) => !(s.id && this.selectedIds.has(s.id)));
     this.history.push({ type: "erase", shapes: removed });
     this.selectedIds.clear();
-    this.onSelectionChange?.(0);
+    this.emitSelectionChange();
     this.clearCanvas();
     this.socket.send(JSON.stringify({
       type: "chat",
@@ -289,7 +336,7 @@ export class Game {
     this.selectedIds.forEach((id) => {
       if (!existingIds.has(id)) { this.selectedIds.delete(id); changed = true; }
     });
-    if (changed) this.onSelectionChange?.(this.selectedIds.size);
+    if (changed) this.emitSelectionChange();
   }
 
   // Canvas-space point at the center of the current viewport (accounts for pan/zoom)
@@ -361,15 +408,19 @@ export class Game {
     switch (shape.type) {
       case "rect":
         ctx.save();
+        ctx.lineWidth = shape.strokeWidth ?? 2;
+        if (shape.fillColor) { ctx.fillStyle = shape.fillColor; ctx.fillRect(shape.x, shape.y, shape.width, shape.height); }
         if (shape.color) ctx.strokeStyle = shape.color;
         ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
         ctx.restore();
         break;
       case "ellipse":
         ctx.save();
-        if (shape.color) ctx.strokeStyle = shape.color;
+        ctx.lineWidth = shape.strokeWidth ?? 2;
         ctx.beginPath();
         ctx.ellipse(shape.centerX, shape.centerY, Math.abs(shape.rx), Math.abs(shape.ry), 0, 0, Math.PI * 2);
+        if (shape.fillColor) { ctx.fillStyle = shape.fillColor; ctx.fill(); }
+        if (shape.color) ctx.strokeStyle = shape.color;
         ctx.stroke();
         ctx.restore();
         break;
@@ -380,7 +431,7 @@ export class Game {
         break;
       case "diamond": {
         ctx.save();
-        if (shape.color) ctx.strokeStyle = shape.color;
+        ctx.lineWidth = shape.strokeWidth ?? 2;
         const cx = shape.x + shape.width  / 2;
         const cy = shape.y + shape.height / 2;
         ctx.beginPath();
@@ -389,12 +440,15 @@ export class Game {
         ctx.lineTo(cx,              shape.y + shape.height);
         ctx.lineTo(shape.x,        cy);
         ctx.closePath();
+        if (shape.fillColor) { ctx.fillStyle = shape.fillColor; ctx.fill(); }
+        if (shape.color) ctx.strokeStyle = shape.color;
         ctx.stroke();
         ctx.restore();
         break;
       }
       case "arrow": {
         ctx.save();
+        ctx.lineWidth = shape.strokeWidth ?? 2;
         if (shape.color) ctx.strokeStyle = shape.color;
         const { startX, startY, endX, endY } = shape;
         const angle = Math.atan2(endY - startY, endX - startX);
@@ -412,6 +466,7 @@ export class Game {
       }
       case "line":
         ctx.save();
+        ctx.lineWidth = shape.strokeWidth ?? 2;
         if (shape.color) ctx.strokeStyle = shape.color;
         ctx.beginPath();
         ctx.moveTo(shape.startX, shape.startY);
@@ -423,6 +478,7 @@ export class Game {
         const pts = shape.points;
         if (pts.length < 2) break;
         ctx.save();
+        ctx.lineWidth = shape.strokeWidth ?? 2;
         if (shape.color) ctx.strokeStyle = shape.color;
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
@@ -743,7 +799,7 @@ export class Game {
     ctx.setTransform(this.zoom * this.dpr, 0, 0, this.zoom * this.dpr, this.panX * this.dpr, this.panY * this.dpr);
     ctx.strokeStyle = this.currentColor ?? this.strokeColor;
     ctx.fillStyle   = this.currentColor ?? this.strokeColor;
-    ctx.lineWidth   = 2;
+    ctx.lineWidth   = this.currentStrokeWidth;
     ctx.lineCap     = "round";
     ctx.lineJoin    = "round";
     fn();
@@ -834,7 +890,7 @@ export class Game {
 
       // 3) Click directly on a shape → select it (shift = add/remove from selection)
       const thr = 10 / this.zoom;
-      const hit = [...this.existingShapes].reverse().find((s) => isNearShape(s, c.x, c.y, thr));
+      const hit = [...this.existingShapes].reverse().find((s) => isPreciseHit(s, c.x, c.y, thr));
 
       if (hit) {
         if (e.shiftKey) {
@@ -847,7 +903,7 @@ export class Game {
           this.dragLastPoint = c;
           this.moveSnapshots = [structuredClone(hit)];
         }
-        this.onSelectionChange?.(this.selectedIds.size);
+        this.emitSelectionChange();
         this.clearCanvas();
         return;
       }
@@ -857,7 +913,7 @@ export class Game {
       this.dragKind = "marquee";
       this.marqueeStart = c;
       this.marqueeCurrent = c;
-      this.onSelectionChange?.(this.selectedIds.size);
+      this.emitSelectionChange();
       this.clearCanvas();
       return;
     }
@@ -1003,12 +1059,16 @@ export class Game {
     this.withZoom(() => {
       const ctx = this.ctx;
       switch (this.selectedTool) {
-        case "rect":
-          ctx.strokeRect(Math.min(this.startX, c.x), Math.min(this.startY, c.y), Math.abs(w), Math.abs(h));
+        case "rect": {
+          const rx = Math.min(this.startX, c.x), ry = Math.min(this.startY, c.y);
+          if (this.currentFillColor) { ctx.fillStyle = this.currentFillColor; ctx.fillRect(rx, ry, Math.abs(w), Math.abs(h)); }
+          ctx.strokeRect(rx, ry, Math.abs(w), Math.abs(h));
           break;
+        }
         case "ellipse":
           ctx.beginPath();
           ctx.ellipse(this.startX + w / 2, this.startY + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2);
+          if (this.currentFillColor) { ctx.fillStyle = this.currentFillColor; ctx.fill(); }
           ctx.stroke();
           break;
         case "diamond": {
@@ -1018,7 +1078,9 @@ export class Game {
           ctx.beginPath();
           ctx.moveTo(cx, dy); ctx.lineTo(dx + dw, cy);
           ctx.lineTo(cx, dy + dh); ctx.lineTo(dx, cy);
-          ctx.closePath(); ctx.stroke();
+          ctx.closePath();
+          if (this.currentFillColor) { ctx.fillStyle = this.currentFillColor; ctx.fill(); }
+          ctx.stroke();
           break;
         }
         case "arrow": {
@@ -1099,7 +1161,7 @@ export class Game {
       this.marqueeStart = null;
       this.marqueeCurrent = null;
       this.moveSnapshots = [];
-      this.onSelectionChange?.(this.selectedIds.size);
+      this.emitSelectionChange();
       this.clearCanvas();
       return;
     }
@@ -1132,31 +1194,33 @@ export class Game {
     const id = genId();
 
     const color = this.currentColor ?? undefined;
+    const fillColor = this.currentFillColor ?? undefined;
+    const strokeWidth = this.currentStrokeWidth;
 
     switch (this.selectedTool) {
       case "rect":
         if (Math.abs(w) > 2 || Math.abs(h) > 2)
-          shape = { type: "rect", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h), color };
+          shape = { type: "rect", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h), color, fillColor, strokeWidth };
         break;
       case "ellipse":
         if (Math.abs(w) > 2 || Math.abs(h) > 2)
-          shape = { type: "ellipse", id, centerX: this.startX + w / 2, centerY: this.startY + h / 2, rx: Math.abs(w / 2), ry: Math.abs(h / 2), color };
+          shape = { type: "ellipse", id, centerX: this.startX + w / 2, centerY: this.startY + h / 2, rx: Math.abs(w / 2), ry: Math.abs(h / 2), color, fillColor, strokeWidth };
         break;
       case "diamond":
         if (Math.abs(w) > 2 || Math.abs(h) > 2)
-          shape = { type: "diamond", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h), color };
+          shape = { type: "diamond", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h), color, fillColor, strokeWidth };
         break;
       case "arrow":
         if (Math.hypot(w, h) > 5)
-          shape = { type: "arrow", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y, color };
+          shape = { type: "arrow", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y, color, strokeWidth };
         break;
       case "line":
         if (Math.hypot(w, h) > 5)
-          shape = { type: "line", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y, color };
+          shape = { type: "line", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y, color, strokeWidth };
         break;
       case "pencil":
         if (this.currentPencilPoints.length > 1)
-          shape = { type: "pencil", id, points: [...this.currentPencilPoints], color };
+          shape = { type: "pencil", id, points: [...this.currentPencilPoints], color, strokeWidth };
         this.currentPencilPoints = [];
         break;
       case "highlighter":
@@ -1213,6 +1277,50 @@ function segDist(px: number, py: number, ax: number, ay: number, bx: number, by:
   if (len2 === 0) return Math.hypot(px - ax, py - ay);
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function isNearRectOutline(x: number, y: number, rx: number, ry: number, w: number, h: number, thr: number): boolean {
+  const edges: [number, number, number, number][] = [
+    [rx, ry, rx + w, ry], [rx + w, ry, rx + w, ry + h],
+    [rx + w, ry + h, rx, ry + h], [rx, ry + h, rx, ry],
+  ];
+  return edges.some(([ax, ay, bx, by]) => segDist(x, y, ax, ay, bx, by) <= thr);
+}
+
+function isNearDiamondOutline(x: number, y: number, dx: number, dy: number, w: number, h: number, thr: number): boolean {
+  const cx = dx + w / 2, cy = dy + h / 2;
+  const top = { x: cx, y: dy }, right = { x: dx + w, y: cy }, bottom = { x: cx, y: dy + h }, left = { x: dx, y: cy };
+  const edges = [[top, right], [right, bottom], [bottom, left], [left, top]] as const;
+  return edges.some(([a, b]) => segDist(x, y, a.x, a.y, b.x, b.y) <= thr);
+}
+
+// Approximates "near the ellipse's boundary ring" (not just inside it) using the
+// normalized radius — good enough for click precision, not pixel-perfect geometry.
+function isNearEllipseOutline(x: number, y: number, cx: number, cy: number, rx: number, ry: number, thr: number): boolean {
+  const ndx = (x - cx) / Math.max(1e-6, rx);
+  const ndy = (y - cy) / Math.max(1e-6, ry);
+  const normalizedDist = Math.sqrt(ndx * ndx + ndy * ndy);
+  const tolerance = thr / (Math.max(1e-6, (rx + ry) / 2));
+  return Math.abs(normalizedDist - 1) <= tolerance;
+}
+
+// Precise hit test used for click-to-select: unfilled closed shapes are only
+// clickable near their actual outline, not anywhere in their (empty) bounding box —
+// otherwise a large unfilled shape "swallows" clicks meant for a smaller shape nested inside it.
+function isPreciseHit(shape: Shape, x: number, y: number, thr: number): boolean {
+  switch (shape.type) {
+    case "rect":
+      if (shape.fillColor) return isNearShape(shape, x, y, thr);
+      return isNearRectOutline(x, y, shape.x, shape.y, shape.width, shape.height, thr);
+    case "diamond":
+      if (shape.fillColor) return isNearShape(shape, x, y, thr);
+      return isNearDiamondOutline(x, y, shape.x, shape.y, shape.width, shape.height, thr);
+    case "ellipse":
+      if (shape.fillColor) return isNearShape(shape, x, y, thr);
+      return isNearEllipseOutline(x, y, shape.centerX, shape.centerY, shape.rx, shape.ry, thr);
+    default:
+      return isNearShape(shape, x, y, thr);
+  }
 }
 
 function isNearShape(shape: Shape, x: number, y: number, thr: number): boolean {
