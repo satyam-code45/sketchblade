@@ -9,19 +9,25 @@ export type Tool =
   | "arrow"
   | "line"
   | "pencil"
+  | "highlighter"
   | "text"
   | "eraser";
 
 // Every shape carries an id so erases can be replayed from the DB
 export type Shape =
-  | { type: "rect";    id?: string; x: number; y: number; width: number; height: number }
-  | { type: "ellipse"; id?: string; centerX: number; centerY: number; rx: number; ry: number }
-  | { type: "circle";  id?: string; centerX: number; centerY: number; radius: number } // legacy
-  | { type: "diamond"; id?: string; x: number; y: number; width: number; height: number }
-  | { type: "arrow";   id?: string; startX: number; startY: number; endX: number; endY: number }
-  | { type: "line";    id?: string; startX: number; startY: number; endX: number; endY: number }
-  | { type: "pencil";  id?: string; points: { x: number; y: number }[] }
-  | { type: "text";    id?: string; x: number; y: number; text: string; fontSize?: number };
+  | { type: "rect";        id?: string; x: number; y: number; width: number; height: number; color?: string }
+  | { type: "ellipse";     id?: string; centerX: number; centerY: number; rx: number; ry: number; color?: string }
+  | { type: "circle";      id?: string; centerX: number; centerY: number; radius: number } // legacy
+  | { type: "diamond";     id?: string; x: number; y: number; width: number; height: number; color?: string }
+  | { type: "arrow";       id?: string; startX: number; startY: number; endX: number; endY: number; color?: string }
+  | { type: "line";        id?: string; startX: number; startY: number; endX: number; endY: number; color?: string }
+  | { type: "pencil";      id?: string; points: { x: number; y: number }[]; color?: string }
+  | { type: "highlighter"; id?: string; points: { x: number; y: number }[]; color?: string }
+  | { type: "text";        id?: string; x: number; y: number; text: string; fontSize?: number; color?: string }
+  | { type: "image";       id?: string; x: number; y: number; width: number; height: number; url: string }
+  | { type: "video";       id?: string; x: number; y: number; width: number; height: number; url: string; poster?: string };
+
+export type VideoShape = Extract<Shape, { type: "video" }>;
 
 const genId = () => Math.random().toString(36).slice(2, 10);
 
@@ -58,15 +64,23 @@ export class Game {
 
   selectedTool: Tool = "rect";
 
+  // Style state applied to newly-created shapes
+  private currentColor: string | null = null; // null = follow theme default
+  private currentFontSize = 20;
+  private canvasColor: string | null = null; // null = follow theme default background
+  private imageCache: Map<string, HTMLImageElement> = new Map();
+
   private onTextRequest?: (sx: number, sy: number, cx: number, cy: number) => void;
   private onZoomChange?: (zoom: number) => void;
+  private onVideoOpen?: (shape: VideoShape) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
     roomId: string,
     socket: WebSocket,
     onTextRequest?: (sx: number, sy: number, cx: number, cy: number) => void,
-    onZoomChange?: (zoom: number) => void
+    onZoomChange?: (zoom: number) => void,
+    onVideoOpen?: (shape: VideoShape) => void
   ) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d")!;
@@ -75,6 +89,7 @@ export class Game {
     this.roomId = roomId;
     this.onTextRequest = onTextRequest;
     this.onZoomChange = onZoomChange;
+    this.onVideoOpen = onVideoOpen;
     this.init();
     this.initSocketHandler();
     this.initMouseHandlers();
@@ -83,8 +98,15 @@ export class Game {
 
   // ── Theme ──────────────────────────────────────────────────────────────────
   private get isDark() { return document.documentElement.classList.contains("dark"); }
-  private get bgColor() { return this.isDark ? "#1e1e2e" : "#f8f9fa"; }
-  private get strokeColor() { return this.isDark ? "rgba(255,255,255,0.88)" : "rgba(20,20,20,0.88)"; }
+  private get bgColor() { return this.canvasColor ?? (this.isDark ? "#1e1e2e" : "#f8f9fa"); }
+  // Default draw/text color adapts to whatever background is active (theme or custom)
+  // so it never disappears against a light background picked while the site is dark, or vice versa.
+  private get bgIsLight() {
+    const [r, g, b] = hexToRgb(this.bgColor);
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return luminance > 0.5;
+  }
+  private get strokeColor() { return this.bgIsLight ? "rgba(20,20,20,0.88)" : "rgba(255,255,255,0.88)"; }
 
   // ── Coordinates ───────────────────────────────────────────────────────────
   private toCanvas(clientX: number, clientY: number) {
@@ -152,6 +174,24 @@ export class Game {
     this.onZoomChange?.(1);
   }
 
+  // ── Style controls ──────────────────────────────────────────────────────
+  setColor(color: string | null) { this.currentColor = color; }
+  getColor() { return this.currentColor; }
+
+  setFontSize(size: number) { this.currentFontSize = Math.min(96, Math.max(10, size)); }
+  increaseFontSize() { this.setFontSize(this.currentFontSize + 4); }
+  decreaseFontSize() { this.setFontSize(this.currentFontSize - 4); }
+  getFontSize() { return this.currentFontSize; }
+
+  setCanvasColor(color: string | null) { this.canvasColor = color; this.clearCanvas(); }
+  getCanvasColor() { return this.canvasColor; }
+
+  // Canvas-space point at the center of the current viewport (accounts for pan/zoom)
+  getViewportCenter() {
+    const rect = this.canvas.getBoundingClientRect();
+    return this.toCanvas(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
   private applyZoom(z: number) {
     this.zoom = Math.min(Math.max(0.05, z), 20);
     this.clearCanvas();
@@ -185,7 +225,7 @@ export class Game {
 
   private drawGrid() {
     const ctx = this.ctx;
-    const dotColor = this.isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
+    const dotColor = this.bgIsLight ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.07)";
     const spacing  = 25 * this.zoom;
     const ox = ((this.panX % spacing) + spacing) % spacing;
     const oy = ((this.panY % spacing) + spacing) % spacing;
@@ -204,12 +244,18 @@ export class Game {
     const ctx = this.ctx;
     switch (shape.type) {
       case "rect":
+        ctx.save();
+        if (shape.color) ctx.strokeStyle = shape.color;
         ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+        ctx.restore();
         break;
       case "ellipse":
+        ctx.save();
+        if (shape.color) ctx.strokeStyle = shape.color;
         ctx.beginPath();
         ctx.ellipse(shape.centerX, shape.centerY, Math.abs(shape.rx), Math.abs(shape.ry), 0, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
         break;
       case "circle": // legacy
         ctx.beginPath();
@@ -217,6 +263,8 @@ export class Game {
         ctx.stroke();
         break;
       case "diamond": {
+        ctx.save();
+        if (shape.color) ctx.strokeStyle = shape.color;
         const cx = shape.x + shape.width  / 2;
         const cy = shape.y + shape.height / 2;
         ctx.beginPath();
@@ -226,9 +274,12 @@ export class Game {
         ctx.lineTo(shape.x,        cy);
         ctx.closePath();
         ctx.stroke();
+        ctx.restore();
         break;
       }
       case "arrow": {
+        ctx.save();
+        if (shape.color) ctx.strokeStyle = shape.color;
         const { startX, startY, endX, endY } = shape;
         const angle = Math.atan2(endY - startY, endX - startX);
         const hl = 14;
@@ -240,17 +291,23 @@ export class Game {
         ctx.moveTo(endX, endY);
         ctx.lineTo(endX - hl * Math.cos(angle + Math.PI / 6), endY - hl * Math.sin(angle + Math.PI / 6));
         ctx.stroke();
+        ctx.restore();
         break;
       }
       case "line":
+        ctx.save();
+        if (shape.color) ctx.strokeStyle = shape.color;
         ctx.beginPath();
         ctx.moveTo(shape.startX, shape.startY);
         ctx.lineTo(shape.endX,   shape.endY);
         ctx.stroke();
+        ctx.restore();
         break;
       case "pencil": {
         const pts = shape.points;
         if (pts.length < 2) break;
+        ctx.save();
+        if (shape.color) ctx.strokeStyle = shape.color;
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length - 1; i++) {
@@ -260,23 +317,104 @@ export class Game {
         }
         ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
         ctx.stroke();
+        ctx.restore();
+        break;
+      }
+      case "highlighter": {
+        const pts = shape.points;
+        if (pts.length < 2) break;
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth   = 14;
+        ctx.strokeStyle = shape.color ?? "#fbbf24";
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const mx = (pts[i].x + pts[i + 1].x) / 2;
+          const my = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+        }
+        ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        ctx.stroke();
+        ctx.restore();
         break;
       }
       case "text":
         ctx.save();
         ctx.font      = `${shape.fontSize ?? 18}px Inter, ui-sans-serif, sans-serif`;
-        ctx.fillStyle = this.strokeColor;
+        ctx.fillStyle = shape.color ?? this.strokeColor;
         ctx.fillText(shape.text, shape.x, shape.y);
         ctx.restore();
         break;
+      case "image": {
+        const img = this.getImage(shape.url);
+        ctx.save();
+        if (img.complete && img.naturalWidth > 0) {
+          ctx.drawImage(img, shape.x, shape.y, shape.width, shape.height);
+        } else {
+          ctx.fillStyle = this.bgIsLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.06)";
+          ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+          ctx.strokeStyle = this.strokeColor;
+          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+          ctx.fillStyle = this.strokeColor;
+          ctx.font = "13px Inter, ui-sans-serif, sans-serif";
+          ctx.fillText("Loading image…", shape.x + 10, shape.y + shape.height / 2);
+        }
+        ctx.restore();
+        break;
+      }
+      case "video": {
+        const poster = shape.poster ? this.getImage(shape.poster) : null;
+        ctx.save();
+        if (poster && poster.complete && poster.naturalWidth > 0) {
+          ctx.drawImage(poster, shape.x, shape.y, shape.width, shape.height);
+          ctx.fillStyle = "rgba(0,0,0,0.35)";
+          ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+        } else {
+          ctx.fillStyle = "#111827";
+          ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+        }
+        ctx.strokeStyle = this.strokeColor;
+        ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+
+        const cx = shape.x + shape.width / 2;
+        const cy = shape.y + shape.height / 2;
+        const r  = Math.min(shape.width, shape.height) * 0.15;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.35, cy - r * 0.5);
+        ctx.lineTo(cx - r * 0.35, cy + r * 0.5);
+        ctx.lineTo(cx + r * 0.55, cy);
+        ctx.closePath();
+        ctx.fillStyle = "#111827";
+        ctx.fill();
+        ctx.restore();
+        break;
+      }
     }
+  }
+
+  // Lazily loads (and caches) an image; redraws once it arrives.
+  private getImage(url: string): HTMLImageElement {
+    let img = this.imageCache.get(url);
+    if (!img) {
+      img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => this.clearCanvas();
+      img.src = url;
+      this.imageCache.set(url, img);
+    }
+    return img;
   }
 
   private withZoom(fn: () => void) {
     const ctx = this.ctx;
     ctx.setTransform(this.zoom, 0, 0, this.zoom, this.panX, this.panY);
-    ctx.strokeStyle = this.strokeColor;
-    ctx.fillStyle   = this.strokeColor;
+    ctx.strokeStyle = this.currentColor ?? this.strokeColor;
+    ctx.fillStyle   = this.currentColor ?? this.strokeColor;
     ctx.lineWidth   = 2;
     ctx.lineCap     = "round";
     ctx.lineJoin    = "round";
@@ -330,12 +468,24 @@ export class Game {
       return;
     }
 
+    if (this.selectedTool === "select") {
+      const c = this.toCanvas(e.clientX, e.clientY);
+      const hit = [...this.existingShapes].reverse().find(
+        (s): s is VideoShape =>
+          s.type === "video" &&
+          c.x >= s.x && c.x <= s.x + s.width &&
+          c.y >= s.y && c.y <= s.y + s.height
+      );
+      if (hit) this.onVideoOpen?.(hit);
+      return;
+    }
+
     const c = this.toCanvas(e.clientX, e.clientY);
     this.startX  = c.x;
     this.startY  = c.y;
     this.clicked = true;
 
-    if (this.selectedTool === "pencil") {
+    if (this.selectedTool === "pencil" || this.selectedTool === "highlighter") {
       this.currentPencilPoints = [{ x: c.x, y: c.y }];
     }
     if (this.selectedTool === "eraser") {
@@ -374,17 +524,25 @@ export class Game {
       return;
     }
 
-    // ── Pencil preview ──
-    if (this.selectedTool === "pencil") {
+    // ── Pencil / highlighter preview ──
+    if (this.selectedTool === "pencil" || this.selectedTool === "highlighter") {
+      const isHighlighter = this.selectedTool === "highlighter";
       this.currentPencilPoints.push({ x: c.x, y: c.y });
       this.clearCanvas();
       this.withZoom(() => {
         const pts = this.currentPencilPoints;
         if (pts.length < 2) return;
+        if (isHighlighter) {
+          this.ctx.save();
+          this.ctx.globalAlpha = 0.35;
+          this.ctx.lineWidth   = 14;
+          this.ctx.strokeStyle = this.currentColor ?? "#fbbf24";
+        }
         this.ctx.beginPath();
         this.ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length; i++) this.ctx.lineTo(pts[i].x, pts[i].y);
         this.ctx.stroke();
+        if (isHighlighter) this.ctx.restore();
       });
       return;
     }
@@ -467,30 +625,37 @@ export class Game {
     let shape: Shape | null = null;
     const id = genId();
 
+    const color = this.currentColor ?? undefined;
+
     switch (this.selectedTool) {
       case "rect":
         if (Math.abs(w) > 2 || Math.abs(h) > 2)
-          shape = { type: "rect", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h) };
+          shape = { type: "rect", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h), color };
         break;
       case "ellipse":
         if (Math.abs(w) > 2 || Math.abs(h) > 2)
-          shape = { type: "ellipse", id, centerX: this.startX + w / 2, centerY: this.startY + h / 2, rx: Math.abs(w / 2), ry: Math.abs(h / 2) };
+          shape = { type: "ellipse", id, centerX: this.startX + w / 2, centerY: this.startY + h / 2, rx: Math.abs(w / 2), ry: Math.abs(h / 2), color };
         break;
       case "diamond":
         if (Math.abs(w) > 2 || Math.abs(h) > 2)
-          shape = { type: "diamond", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h) };
+          shape = { type: "diamond", id, x: Math.min(this.startX, c.x), y: Math.min(this.startY, c.y), width: Math.abs(w), height: Math.abs(h), color };
         break;
       case "arrow":
         if (Math.hypot(w, h) > 5)
-          shape = { type: "arrow", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y };
+          shape = { type: "arrow", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y, color };
         break;
       case "line":
         if (Math.hypot(w, h) > 5)
-          shape = { type: "line", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y };
+          shape = { type: "line", id, startX: this.startX, startY: this.startY, endX: c.x, endY: c.y, color };
         break;
       case "pencil":
         if (this.currentPencilPoints.length > 1)
-          shape = { type: "pencil", id, points: [...this.currentPencilPoints] };
+          shape = { type: "pencil", id, points: [...this.currentPencilPoints], color };
+        this.currentPencilPoints = [];
+        break;
+      case "highlighter":
+        if (this.currentPencilPoints.length > 1)
+          shape = { type: "highlighter", id, points: [...this.currentPencilPoints], color };
         this.currentPencilPoints = [];
         break;
     }
@@ -527,6 +692,14 @@ export class Game {
 }
 
 // ── Eraser helpers ─────────────────────────────────────────────────────────
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  const full  = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const num   = parseInt(full, 16);
+  if (full.length !== 6 || Number.isNaN(num)) return [0, 0, 0];
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
 function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
   const dx = bx - ax, dy = by - ay;
   const len2 = dx * dx + dy * dy;
@@ -554,10 +727,15 @@ function isNearShape(shape: Shape, x: number, y: number, thr: number): boolean {
     case "line":
       return segDist(x, y, shape.startX, shape.startY, shape.endX, shape.endY) <= thr;
     case "pencil":
+    case "highlighter":
       return shape.points.some((p) => Math.hypot(p.x - x, p.y - y) <= thr * 2);
     case "text":
       return x >= shape.x - thr && x <= shape.x + 200 &&
              y >= shape.y - 20 - thr && y <= shape.y + thr;
+    case "image":
+    case "video":
+      return x >= shape.x - thr && x <= shape.x + shape.width  + thr &&
+             y >= shape.y - thr && y <= shape.y + shape.height + thr;
     default:
       return false;
   }

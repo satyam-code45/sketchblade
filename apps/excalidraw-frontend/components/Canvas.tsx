@@ -11,17 +11,26 @@ import {
   Diamond,
   Eraser,
   Hand,
+  Highlighter,
+  ImagePlus,
+  Loader2,
   Maximize2,
+  MinusCircle,
   Minus,
   MousePointer2,
+  Palette,
   Pencil,
+  PlusCircle,
   RotateCcw,
   Square,
   Type,
+  Video,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { Game, Tool, Shape } from "@/draw";
+import { uploadToCloudinary, cloudinaryVideoPoster } from "@/lib/cloudinary";
 import ThemeToggle from "./ThemeToggle";
 import React from "react";
 
@@ -59,12 +68,23 @@ const TOOL_GROUPS: { id: Tool; icon: React.ReactNode; shortcut: string; label: s
     { id: "line",    icon: <Minus        className="size-[18px]" />, shortcut: "L", label: "Line" },
   ],
   [
-    { id: "pencil", icon: <Pencil className="size-[18px]" />, shortcut: "P", label: "Draw" },
-    { id: "text",   icon: <Type   className="size-[18px]" />, shortcut: "T", label: "Text" },
+    { id: "pencil",      icon: <Pencil      className="size-[18px]" />, shortcut: "P", label: "Draw" },
+    { id: "highlighter", icon: <Highlighter className="size-[18px]" />, shortcut: "G", label: "Highlighter" },
+    { id: "text",        icon: <Type        className="size-[18px]" />, shortcut: "T", label: "Text" },
   ],
   [
     { id: "eraser", icon: <Eraser className="size-[18px]" />, shortcut: "X", label: "Eraser" },
   ],
+];
+
+const DRAW_COLOR_SWATCHES = [
+  "#7c3aed", "#dc2626", "#d97706", "#059669",
+  "#0284c7", "#db2777", "#000000", "#ffffff",
+];
+
+const BG_COLOR_SWATCHES = [
+  "#ffffff", "#f8f9fa", "#f4f1ea", "#eef2ff",
+  "#0f172a", "#1e1e2e", "#111827", "#052e16",
 ];
 
 export default function Canvas({
@@ -94,6 +114,21 @@ export default function Canvas({
   } | null>(null);
   const [textValue, setTextValue] = useState("");
 
+  // Style: stroke/fill/text color + canvas background + font size
+  // (null = follow theme default)
+  const [color, setColor]             = useState<string | null>(null);
+  const [canvasColor, setCanvasColor] = useState<string | null>(null);
+  const [colorOpen, setColorOpen]     = useState(false);
+  const colorRef                      = useRef<HTMLDivElement>(null);
+  const [fontSize, setFontSize]       = useState(20);
+
+  // Image / video insert via Cloudinary
+  const imageInputRef             = useRef<HTMLInputElement>(null);
+  const videoInputRef             = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState<"image" | "video" | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const [videoModal, setVideoModal]   = useState<{ url: string } | null>(null);
+
   // ── Bootstrap game ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -104,7 +139,8 @@ export default function Canvas({
     const game = new Game(
       canvas, roomId, socket,
       (sx, sy, cx, cy) => { setTextInput({ sx, sy, cx, cy }); setTextValue(""); },
-      (z) => setZoom(Math.round(z * 100))
+      (z) => setZoom(Math.round(z * 100)),
+      (shape) => setVideoModal({ url: shape.url })
     );
     gameRef.current = game;
 
@@ -122,8 +158,11 @@ export default function Canvas({
     };
   }, [roomId, socket]);
 
-  // Sync tool into game
+  // Sync tool/style into game
   useEffect(() => { gameRef.current?.setTool(selectedTool); }, [selectedTool]);
+  useEffect(() => { gameRef.current?.setColor(color); }, [color]);
+  useEffect(() => { gameRef.current?.setFontSize(fontSize); }, [fontSize]);
+  useEffect(() => { gameRef.current?.setCanvasColor(canvasColor); }, [canvasColor]);
 
   // Theme change → redraw (so canvas background updates)
   useEffect(() => {
@@ -148,6 +187,7 @@ export default function Canvas({
       const map: Record<string, Tool> = {
         v: "select", h: "hand",   r: "rect", d: "diamond",
         e: "ellipse", a: "arrow", l: "line", p: "pencil",
+        g: "highlighter",
         t: "text",   x: "eraser",
       };
       if (map[e.key.toLowerCase()]) setSelectedTool(map[e.key.toLowerCase()]);
@@ -179,15 +219,88 @@ export default function Canvas({
     return () => document.removeEventListener("mousedown", handler);
   }, [presenceOpen]);
 
+  // ── Color popover: close on outside click ───────────────────────────────
+  useEffect(() => {
+    if (!colorOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (colorRef.current && !colorRef.current.contains(e.target as Node)) {
+        setColorOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [colorOpen]);
+
   // ── Text commit ─────────────────────────────────────────────────────────
   const commitText = useCallback(() => {
     const game = gameRef.current;
     if (textInput && textValue.trim() && game) {
-      game.addShape({ type: "text", x: textInput.cx, y: textInput.cy, text: textValue.trim() } as Shape);
+      game.addShape({
+        type: "text",
+        x: textInput.cx,
+        y: textInput.cy,
+        text: textValue.trim(),
+        fontSize,
+        color: color ?? undefined,
+      } as Shape);
     }
     setTextInput(null);
     setTextValue("");
-  }, [textInput, textValue]);
+  }, [textInput, textValue, fontSize, color]);
+
+  // ── Image / video insert (Cloudinary) ───────────────────────────────────
+  const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const game = gameRef.current;
+    if (!game) return;
+
+    setUploading("image");
+    setUploadError("");
+    try {
+      const { secure_url, width, height } = await uploadToCloudinary(file, "image");
+      const ratio  = width && height ? width / height : 1;
+      const maxDim = 320;
+      const w = ratio >= 1 ? maxDim : maxDim * ratio;
+      const h = ratio >= 1 ? maxDim / ratio : maxDim;
+      const center = game.getViewportCenter();
+      game.addShape({
+        type: "image", x: center.x - w / 2, y: center.y - h / 2, width: w, height: h, url: secure_url,
+      } as Shape);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Image upload failed");
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const handleVideoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const game = gameRef.current;
+    if (!game) return;
+
+    setUploading("video");
+    setUploadError("");
+    try {
+      const { secure_url, width, height } = await uploadToCloudinary(file, "video");
+      const ratio  = width && height ? width / height : 16 / 9;
+      const maxDim = 360;
+      const w = ratio >= 1 ? maxDim : maxDim * ratio;
+      const h = ratio >= 1 ? maxDim / ratio : maxDim;
+      const center = game.getViewportCenter();
+      game.addShape({
+        type: "video", x: center.x - w / 2, y: center.y - h / 2, width: w, height: h,
+        url: secure_url, poster: cloudinaryVideoPoster(secure_url),
+      } as Shape);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Video upload failed");
+    } finally {
+      setUploading(null);
+    }
+  };
 
   // ── Share code ──────────────────────────────────────────────────────────
   const copyCode = async () => {
@@ -270,6 +383,156 @@ export default function Canvas({
             </React.Fragment>
           ))}
 
+          {/* Color picker — draw/text color + canvas background */}
+          <div className="mx-1 h-6 w-px bg-border/60" />
+          <div ref={colorRef} className="relative">
+            <button
+              onClick={() => setColorOpen((v) => !v)}
+              title="Colors"
+              className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            >
+              {color ? (
+                <span className="size-[16px] rounded-full border border-border/60 shadow-sm" style={{ backgroundColor: color }} />
+              ) : (
+                <Palette className="size-[18px]" />
+              )}
+              {canvasColor && (
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 size-[9px] rounded-full border-2 border-background shadow-sm"
+                  style={{ backgroundColor: canvasColor }}
+                />
+              )}
+            </button>
+            {colorOpen && (
+              <div className="absolute left-1/2 top-full mt-2 w-60 -translate-x-1/2 rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
+                {/* Draw & text color */}
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Draw &amp; text color
+                </p>
+                <div className="grid grid-cols-8 gap-1.5">
+                  {DRAW_COLOR_SWATCHES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setColor(c)}
+                      title={c}
+                      className={[
+                        "size-6 rounded-full border shadow-sm transition-transform hover:scale-110",
+                        color === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                      ].join(" ")}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={color ?? "#7c3aed"}
+                    onChange={(e) => setColor(e.target.value)}
+                    className="h-7 w-7 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+                    title="Custom color"
+                  />
+                  <button
+                    onClick={() => setColor(null)}
+                    className={[
+                      "flex-1 rounded-md px-2 py-1 text-[11px] transition-colors",
+                      color === null
+                        ? "bg-violet-600/10 text-violet-500"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    Auto (theme)
+                  </button>
+                </div>
+
+                <div className="my-3 h-px bg-border/40" />
+
+                {/* Canvas background */}
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Canvas background
+                </p>
+                <div className="grid grid-cols-8 gap-1.5">
+                  {BG_COLOR_SWATCHES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setCanvasColor(c)}
+                      title={c}
+                      className={[
+                        "size-6 rounded-full border shadow-sm transition-transform hover:scale-110",
+                        canvasColor === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                      ].join(" ")}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={canvasColor ?? "#f8f9fa"}
+                    onChange={(e) => setCanvasColor(e.target.value)}
+                    className="h-7 w-7 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+                    title="Custom background"
+                  />
+                  <button
+                    onClick={() => setCanvasColor(null)}
+                    className={[
+                      "flex-1 rounded-md px-2 py-1 text-[11px] transition-colors",
+                      canvasColor === null
+                        ? "bg-violet-600/10 text-violet-500"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    Auto (theme)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Font size (applies to next text you place) */}
+          <div className="mx-1 h-6 w-px bg-border/60" />
+          <button
+            onClick={() => setFontSize((f) => Math.max(10, f - 4))}
+            title="Decrease font size"
+            className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <MinusCircle className="size-[18px]" />
+          </button>
+          <span className="min-w-[28px] text-center font-mono text-xs text-muted-foreground" title="Text font size">
+            {fontSize}
+          </span>
+          <button
+            onClick={() => setFontSize((f) => Math.min(96, f + 4))}
+            title="Increase font size"
+            className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <PlusCircle className="size-[18px]" />
+          </button>
+
+          {/* Insert: image / video (uploaded to Cloudinary) */}
+          <div className="mx-1 h-6 w-px bg-border/60" />
+          <button
+            onClick={() => imageInputRef.current?.click()}
+            disabled={uploading !== null}
+            title="Insert image"
+            className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+          >
+            {uploading === "image" ? <Loader2 className="size-[18px] animate-spin" /> : <ImagePlus className="size-[18px]" />}
+            <span className="pointer-events-none absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-foreground shadow-md opacity-0 transition-opacity group-hover:opacity-100 backdrop-blur-sm">
+              Insert image
+            </span>
+          </button>
+          <button
+            onClick={() => videoInputRef.current?.click()}
+            disabled={uploading !== null}
+            title="Insert video"
+            className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+          >
+            {uploading === "video" ? <Loader2 className="size-[18px] animate-spin" /> : <Video className="size-[18px]" />}
+            <span className="pointer-events-none absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-foreground shadow-md opacity-0 transition-opacity group-hover:opacity-100 backdrop-blur-sm">
+              Insert video
+            </span>
+          </button>
+
           {/* Undo */}
           <div className="mx-1 h-6 w-px bg-border/60" />
           <button
@@ -284,6 +547,10 @@ export default function Canvas({
           </button>
         </div>
       </div>
+
+      {/* Hidden file inputs for Cloudinary uploads */}
+      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
+      <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoFile} />
 
       {/* ── Top-right: presence + theme ── */}
       <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
@@ -405,8 +672,11 @@ export default function Canvas({
       {textInput && (
         <textarea
           ref={textareaRef}
-          style={{ left: textInput.sx, top: textInput.sy - 12, position: "absolute" }}
-          className="z-30 min-h-[36px] min-w-[140px] resize-none rounded-lg border-2 border-violet-500 bg-background px-3 py-2 text-base text-foreground outline-none shadow-xl"
+          style={{
+            left: textInput.sx, top: textInput.sy - 12, position: "absolute",
+            fontSize: `${fontSize}px`, color: color ?? undefined,
+          }}
+          className="z-30 min-h-[36px] min-w-[140px] resize-none rounded-lg border-2 border-violet-500 bg-background px-3 py-2 text-foreground outline-none shadow-xl"
           rows={1}
           placeholder="Type here…"
           value={textValue}
@@ -421,6 +691,39 @@ export default function Canvas({
             // If empty, leave it open so the user can still type after clicking back
           }}
         />
+      )}
+
+      {/* ── Upload error toast ── */}
+      {uploadError && (
+        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-500 shadow-lg backdrop-blur-md">
+          {uploadError}
+          <button onClick={() => setUploadError("")} className="ml-2 underline underline-offset-2">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* ── Video playback modal ── */}
+      {videoModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setVideoModal(null)}
+        >
+          <video
+            src={videoModal.url}
+            controls
+            autoPlay
+            className="max-h-[85vh] max-w-[85vw] rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setVideoModal(null)}
+            title="Close"
+            className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full bg-background/20 text-white transition-colors hover:bg-background/30"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
       )}
     </div>
   );

@@ -2,198 +2,154 @@
 
 A real-time collaborative drawing platform inspired by Excalidraw, built with modern web technologies. Users can create rooms and draw together in real-time with multiple drawing tools.
 
-## 🎥 Project Demo
-
-> **🚀 Coming Soon**: This project will be live soon! Until then, enjoy this demo video showcasing the current functionality.
-
-### 📺 [**Watch Demo Video →**](https://drive.google.com/file/d/1o9F67D2cxU0B7mO_A_Rm60XsxLLtqNcd/view?usp=sharing)
-
-
-
-https://github.com/user-attachments/assets/eaf5c0cc-b80f-477f-940c-1b06640f3aa0
-
-
-
-
-```
-🎬 Demo Highlights:
-✨ Real-time collaborative drawing
-🎨 Multiple drawing tools (pencil, rectangle, circle)
-👥 Multi-user room functionality
-💬 Live chat integration
-🖱️ Smooth drawing experience
-```
-
-*The video demonstrates the seamless collaborative drawing experience with multiple users drawing simultaneously in the same room.*
-
----
-
-## 🚀 Features
+## Features
 
 - **Real-time Collaboration**: Multiple users can draw simultaneously in the same room
-- **Multiple Drawing Tools**: Pencil, rectangle, and circle drawing tools
-- **Room-based Sessions**: Create and join drawing rooms
-- **User Authentication**: Secure sign-up and sign-in system
-- **Real-time Chat**: Chat with other users while drawing (coming soon)
+- **Drawing Tools**: Rectangle, ellipse, diamond, arrow, line, pencil, highlighter, text, and eraser
+- **Style Controls**: Custom stroke/text color, adjustable text font size, and a customizable canvas background color
+- **Media Insert**: Drop images and videos onto the canvas (uploaded to Cloudinary via signed, server-authorized uploads)
+- **Zoom and Pan**: Navigate large canvases with smooth zoom and pan controls
+- **Undo / Redo**: Full undo/redo history that persists to the database via WebSocket
+- **Room-based Sessions**: Create and join rooms with unique slugs and optional passwords
+- **User Authentication**: Sign up, sign in, forgot password, and change password flows
+- **Presence**: See who else is currently in the room
+- **Live Chat**: Per-room chat alongside the canvas
+- **Resilient Connect Flow**: Polls the realtime server's health before joining a room, so a cold-started free-tier backend shows a clear "waking up" message instead of an endless spinner
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Frontend**: Next.js 14, TypeScript, Tailwind CSS
-- **Backend**: Node.js, Express.js, WebSocket (ws)
-- **Database**: PostgreSQL with Prisma ORM
-- **Monorepo**: Turborepo for workspace management
-- **Real-time**: WebSocket connections for live collaboration
+- **Frontend**: Next.js 15 (App Router), TypeScript, Tailwind CSS v4
+- **REST API**: Next.js API Routes (co-located with the frontend)
+- **Real-time**: Node.js WebSocket server (`ws` library)
+- **Database**: Prisma 6 + Neon PostgreSQL
+- **Media**: Cloudinary (signed uploads for images/videos)
+- **Auth**: JWT + bcrypt
+- **Monorepo**: Turborepo, pnpm workspaces
+- **Deployment**: Vercel (frontend), Render (WS backend)
 
-## 📁 Project Structure
+## Project Structure
 
-### Apps and Packages
+```
+sketchblade/
+├── apps/
+│   ├── excalidraw-frontend/   # Next.js 15 app — UI and all REST API routes
+│   └── ws-backend/            # Node.js WebSocket server (real-time sync)
+└── packages/
+    ├── db/                    # Prisma schema + Neon PostgreSQL client (@repo/db)
+    ├── common/                # Shared Zod schemas (@repo/common)
+    ├── backend-common/        # JWT_SECRET config (@repo/backend-common)
+    ├── typescript-config/     # Shared tsconfig bases
+    └── eslint-config/         # Shared ESLint config
+```
 
-- `excalidraw-frontend`: Main drawing application built with Next.js
-- `http-backend`: REST API server for authentication and room management
-- `ws-backend`: WebSocket server for real-time drawing synchronization
-- `@repo/db`: Database package with Prisma schema and client
-- `@repo/common`: Shared TypeScript types and validation schemas
-- `@repo/backend-common`: Shared backend utilities and configuration
-- `@repo/ui`: Shared React component library
-- `@repo/eslint-config`: ESLint configurations
-- `@repo/typescript-config`: TypeScript configurations
+## Architecture
 
-## 🚦 Getting Started
+```
+┌──────────────────────────┐         ┌──────────────────────┐
+│  excalidraw-frontend     │         │  ws-backend          │
+│  (Next.js 15)            │         │  (Node.js / ws)      │
+│                          │         │                      │
+│  - Drawing canvas        │◄───WS──►│  - Drawing events    │
+│  - Drawing tools         │         │  - Undo / redo sync  │
+│  - Zoom / pan            │         │  - Presence          │
+│  - REST API routes       │         │  - Chat events       │
+└──────────────────────────┘         └──────────────────────┘
+            │                                    │
+            └────────────────┬───────────────────┘
+                             │
+                  ┌──────────────────┐
+                  │  Neon PostgreSQL  │
+                  │  (via Prisma)     │
+                  │                  │
+                  │  - Users          │
+                  │  - Rooms          │
+                  │  - Drawings       │
+                  │  - Chats          │
+                  └──────────────────┘
+```
+
+## Local Development
 
 ### Prerequisites
 
-- Node.js 18+ 
-- pnpm (recommended) or npm/yarn
-- PostgreSQL database
+- Node.js 20.x
+- pnpm 9+
+- A PostgreSQL database — [Neon](https://neon.tech) free tier works
 
-### Installation
+### Setup
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/satyam-code45/sketchblade.git
    cd sketchblade
    ```
 
 2. **Install dependencies**
+
    ```bash
    pnpm install
    ```
 
-3. **Set up environment variables**
-   Create `.env` files in the respective packages:
+   This also runs `prisma generate` automatically via the `@repo/db` postinstall script.
+
+3. **Configure environment variables**
+
    ```bash
-   # packages/db/.env
-   DATABASE_URL="postgresql://username:password@localhost:5432/sketchblade"
-   
-   # apps/http-backend/.env (if needed)
-   JWT_SECRET="your-jwt-secret"
+   cp .env.example .env
    ```
 
-4. **Set up the database**
-   ```bash
-   cd packages/db
-   npx prisma migrate dev
-   npx prisma generate
+   Edit `.env` at the repo root and fill in:
+
+   ```env
+   DATABASE_URL=postgresql://...
+   JWT_SECRET=your-secret-here
+   NEXT_PUBLIC_WS_URL=ws://localhost:8080
+
+   # Optional — only needed for image/video insert on the canvas
+   CLOUDINARY_CLOUD_NAME=your-cloud-name
+   CLOUDINARY_API_KEY=your-api-key
+   CLOUDINARY_API_SECRET=your-api-secret
    ```
 
-5. **Start the development servers**
+4. **Push the database schema**
+
    ```bash
-   # Start all services
-   pnpm dev
-   
-   # Or start specific services
-   pnpm dev --filter=excalidraw-frontend
-   pnpm dev --filter=http-backend
-   pnpm dev --filter=ws-backend
+   pnpm --filter=@repo/db db:push
    ```
+
+5. **Start the development servers** (two terminals)
+
+   ```bash
+   # Terminal 1 — WebSocket server on :8080
+   pnpm --filter=ws-backend dev
+
+   # Terminal 2 — Next.js on :3000
+   pnpm --filter=excalidraw-frontend dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Build
 
-To build all apps and packages:
-
 ```bash
-pnpm build
+pnpm --filter=excalidraw-frontend build
+pnpm --filter=ws-backend build
 ```
 
-To build specific packages:
+## Deployment
 
-```bash
-pnpm build --filter=excalidraw-frontend
-pnpm build --filter=http-backend
-```
+The project ships with ready-made config files:
 
-## 🎯 How It Works
+- **`vercel.json`** (repo root) — deploys `apps/excalidraw-frontend` to Vercel
+- **`render.yaml`** (repo root) — deploys `apps/ws-backend` to Render
 
-1. **Authentication**: Users sign up/sign in through the HTTP backend
-2. **Room Creation**: Users can create or join drawing rooms using a unique slug
-3. **Real-time Drawing**: WebSocket connections enable real-time synchronization of drawing events
-4. **Drawing Tools**: Multiple tools available - pencil for freehand, rectangle, and circle shapes
-5. **Persistence**: Drawings are stored in PostgreSQL database (⚠️ **Currently not implemented**)
+See [DEPLOYMENT.md](DEPLOYMENT.md) for environment variable requirements and step-by-step instructions for each platform.
 
-## 🔧 Current Status & Known Issues
+## Contributing
 
-**✅ Working Features:**
-- User authentication (sign-up/sign-in)
-- Room creation and joining
-- Real-time chat system
-- Drawing tools UI (pencil, rectangle, circle)
-- WebSocket connection setup
+Contributions are welcome. Please open an issue or pull request on [GitHub](https://github.com/satyam-code45/sketchblade).
 
-**⚠️ Issues to Fix:**
-- **Drawing data is not being saved to database** - No database schema for drawings
-- **Drawing events are not broadcasted to other users** - WebSocket server doesn't handle drawing events
-- **No persistence of drawings** - Missing API endpoints for saving/loading drawings
-
-## 🛠️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Frontend       │    │  HTTP Backend   │    │  WebSocket      │
-│  (Next.js)      │    │  (Express)      │    │  Backend        │
-│                 │    │                 │    │                 │
-│  - Drawing UI   │◄──►│  - Auth APIs    │    │  - Chat events  │
-│  - Canvas       │    │  - Room APIs    │◄──►│  - Join/Leave   │
-│  - Tools        │    │  - User mgmt    │    │  - [Drawing]*   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   PostgreSQL    │
-                    │   Database      │
-                    │                 │
-                    │  - Users        │
-                    │  - Rooms        │
-                    │  - Chats        │
-                    │  - [Drawings]*  │
-                    └─────────────────┘
-```
-*Features marked with [*] are planned but not yet implemented.
-
-## 📚 API Endpoints
-
-### HTTP Backend (Port 3001)
-- `POST /sign-up` - User registration
-- `POST /sign-in` - User authentication  
-- `POST /create-room` - Create new drawing room
-- `GET /room/:slug` - Get room details
-- `GET /chats/:roomId` - Get chat history
-
-### WebSocket Backend (Port 8080)
-- `join_room` - Join a drawing room
-- `leave_room` - Leave a drawing room
-- `chat` - Send chat messages
-- *(Missing: drawing event handlers)*
-
-## 🤝 Contributing
-
-This project is currently in development. Main areas that need work:
-
-1. **Database Schema**: Add models for storing drawing data
-2. **WebSocket Events**: Implement drawing event handlers
-3. **API Endpoints**: Add endpoints for saving/loading drawings
-4. **Frontend Integration**: Connect drawing events to WebSocket
-
-## 📝 License
+## License
 
 This project is open source and available under the [MIT License](LICENSE).

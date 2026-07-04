@@ -6,10 +6,12 @@ import { prismaClient } from "@repo/db/client";
 
 const PORT = Number(process.env.PORT) || 8080;
 
-// HTTP server — serves /health for uptime monitors (keeps Render free tier alive)
+// HTTP server — serves /health for uptime monitors and for the frontend to poll
+// while waiting for a sleeping Render free-tier instance to wake up.
 const server = createServer((req, res) => {
   if (req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "text/plain" });
+    // Cross-origin: the frontend (Vercel) polls this from a different origin.
+    res.writeHead(200, { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" });
     res.end("ok");
     return;
   }

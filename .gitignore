@@ -44,3 +44,4 @@ yarn-error.log*
 # Local docs (not for version control)
 DEPLOYMENT.md
 INTERVIEW_QUESTIONS.md
+PROJECT_INTERVIEW.md
