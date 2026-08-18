@@ -101,6 +101,18 @@ export class Game {
     | { type: "update"; before: Shape[] }
   > = [];
 
+  // Redo stack: the forward-direction counterpart of whatever was just undone. Captured
+  // lazily inside undo()/redo() themselves (never at action time) — because history is a
+  // strict LIFO stack, by the time an entry is undone every later mutation on the same
+  // shape has already been undone too, so "current state" at that instant is always the
+  // right snapshot to redo back to. Any *new* action clears this: redoing after a fresh
+  // edit would resurrect a timeline that no longer makes sense.
+  private redoStack: Array<
+    | { type: "add"; shape: Shape }
+    | { type: "erase"; shapes: Shape[] }
+    | { type: "update"; after: Shape[] }
+  > = [];
+
   // Zoom / pan
   private zoom = 1;
   private panX = 0;
@@ -202,6 +214,7 @@ export class Game {
     if (!shape.id) (shape as Shape & { id: string }).id = genId();
     this.existingShapes.push(shape);
     this.history.push({ type: "add", shapeId: shape.id! });
+    this.redoStack = [];
     // Auto-select what you just drew so style-panel tweaks (stroke width, color, fill…)
     // apply to it immediately, without switching to the select tool first. Stays selected
     // until you switch tools or draw the next shape (which takes over the selection).
@@ -216,22 +229,76 @@ export class Game {
     const last = this.history.pop()!;
 
     if (last.type === "add") {
+      const removed = this.existingShapes.find((s) => s.id === last.shapeId);
       this.existingShapes = this.existingShapes.filter((s) => s.id !== last.shapeId);
       this.socket.send(JSON.stringify({
         type: "chat",
         roomId: Number(this.roomId),
         message: JSON.stringify({ erase: [last.shapeId] }),
       }));
+      // Snapshot what was actually removed so redo can bring back exactly that (not
+      // whatever the shape looked like at draw-time, in case it was edited since).
+      if (removed) this.redoStack.push({ type: "add", shape: structuredClone(removed) });
+
     } else if (last.type === "erase") {
       last.shapes.forEach((s) => this.existingShapes.push(s));
       last.shapes.forEach((s) => this.broadcastShapeUpdate(s));
+      this.redoStack.push({ type: "erase", shapes: last.shapes });
+
     } else if (last.type === "update") {
+      // Capture the post-mutation state *before* we overwrite it — this is what redo
+      // needs to reapply the change we're about to undo.
+      const after: Shape[] = last.before.map((snap) => {
+        const cur = this.existingShapes.find((s) => s.id === snap.id);
+        return cur ? structuredClone(cur) : snap;
+      });
       last.before.forEach((prevShape) => {
         const idx = this.existingShapes.findIndex((s) => s.id === prevShape.id);
         if (idx >= 0) this.existingShapes[idx] = prevShape;
         else this.existingShapes.push(prevShape);
         this.broadcastShapeUpdate(prevShape);
       });
+      this.redoStack.push({ type: "update", after });
+    }
+
+    this.pruneSelection();
+    this.clearCanvas();
+  }
+
+  // Reapplies the most recently undone action. Mirrors undo(): pops redoStack, applies
+  // the change forward, and pushes the corresponding entry back onto history so the
+  // redone action can itself be undone again.
+  redo() {
+    if (this.redoStack.length === 0) return;
+    const next = this.redoStack.pop()!;
+
+    if (next.type === "add") {
+      this.existingShapes.push(next.shape);
+      this.broadcastShapeUpdate(next.shape);
+      this.history.push({ type: "add", shapeId: next.shape.id! });
+
+    } else if (next.type === "erase") {
+      const ids = next.shapes.map((s) => s.id!).filter(Boolean);
+      this.existingShapes = this.existingShapes.filter((s) => !(s.id && ids.includes(s.id)));
+      this.socket.send(JSON.stringify({
+        type: "chat",
+        roomId: Number(this.roomId),
+        message: JSON.stringify({ erase: ids }),
+      }));
+      this.history.push({ type: "erase", shapes: next.shapes });
+
+    } else if (next.type === "update") {
+      const before: Shape[] = next.after.map((snap) => {
+        const cur = this.existingShapes.find((s) => s.id === snap.id);
+        return cur ? structuredClone(cur) : snap;
+      });
+      next.after.forEach((afterShape) => {
+        const idx = this.existingShapes.findIndex((s) => s.id === afterShape.id);
+        if (idx >= 0) this.existingShapes[idx] = afterShape;
+        else this.existingShapes.push(afterShape);
+        this.broadcastShapeUpdate(afterShape);
+      });
+      this.history.push({ type: "update", before });
     }
 
     this.pruneSelection();
@@ -262,6 +329,7 @@ export class Game {
     });
     if (before.length === 0) return;
     this.history.push({ type: "update", before });
+    this.redoStack = [];
     before.forEach((snap) => {
       const cur = this.existingShapes.find((s) => s.id === snap.id);
       if (cur) this.broadcastShapeUpdate(cur);
@@ -330,6 +398,7 @@ export class Game {
     const ids = removed.map((s) => s.id!);
     this.existingShapes = this.existingShapes.filter((s) => !(s.id && this.selectedIds.has(s.id)));
     this.history.push({ type: "erase", shapes: removed });
+    this.redoStack = [];
     this.selectedIds.clear();
     this.emitSelectionChange();
     this.clearCanvas();
@@ -350,6 +419,7 @@ export class Game {
     const before: Shape[] = [];
     shapes.forEach((s) => { before.push(structuredClone(s)); s.locked = shouldLock; });
     this.history.push({ type: "update", before });
+    this.redoStack = [];
     before.forEach((snap) => {
       const cur = this.existingShapes.find((s) => s.id === snap.id);
       if (cur) this.broadcastShapeUpdate(cur);
@@ -1160,6 +1230,7 @@ export class Game {
         });
         if (moved) {
           this.history.push({ type: "update", before });
+          this.redoStack = [];
           before.forEach((snap) => {
             const cur = this.existingShapes.find((s) => s.id === snap.id);
             if (cur) this.broadcastShapeUpdate(cur);
@@ -1170,6 +1241,7 @@ export class Game {
         const cur = this.existingShapes.find((s) => s.id === this.resizeShapeId);
         if (cur && JSON.stringify(cur) !== JSON.stringify(this.resizeOriginalShape)) {
           this.history.push({ type: "update", before });
+          this.redoStack = [];
           this.broadcastShapeUpdate(cur);
         }
       } else if (this.dragKind === "marquee" && this.marqueeStart) {

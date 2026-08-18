@@ -24,6 +24,7 @@ import {
   Pencil,
   PlusCircle,
   RotateCcw,
+  RotateCw,
   Square,
   Type,
   Unlock,
@@ -262,7 +263,13 @@ export default function Canvas({
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        game?.undo();
+        if (e.shiftKey) game?.redo();
+        else game?.undo();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        game?.redo();
         return;
       }
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -705,6 +712,16 @@ export default function Canvas({
             <RotateCcw className="size-[18px]" />
             <span className="pointer-events-none absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-foreground shadow-md opacity-0 transition-opacity group-hover:opacity-100 backdrop-blur-sm">
               Undo <kbd className="ml-1 font-mono text-muted-foreground">⌘Z</kbd>
+            </span>
+          </button>
+          <button
+            onClick={() => gameRef.current?.redo()}
+            aria-label="Redo"
+            className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <RotateCw className="size-[18px]" />
+            <span className="pointer-events-none absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-foreground shadow-md opacity-0 transition-opacity group-hover:opacity-100 backdrop-blur-sm">
+              Redo <kbd className="ml-1 font-mono text-muted-foreground">⌘⇧Z</kbd>
             </span>
           </button>
         </div>
