@@ -919,6 +919,13 @@ export class Game {
   // ── Socket ────────────────────────────────────────────────────────────────
   private socketMsgHandler = (event: MessageEvent) => {
     const msg = JSON.parse(event.data);
+    if (msg.type === "chat_failed") {
+      // The server couldn't persist this operation (e.g. a cold Neon/DB connection
+      // timing out) and deliberately didn't broadcast it. It's already rendered
+      // locally, so surface this loudly rather than let it silently vanish on reload.
+      console.error(`[draw] a change to room ${msg.roomId} failed to save — it will not persist or sync to other clients.`);
+      return;
+    }
     if (msg.type !== "chat") return;
 
     let data: { shape?: Shape; erase?: string[] };
