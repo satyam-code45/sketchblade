@@ -54,4 +54,7 @@ model Chat {
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
+
+  // Replay filters by room and orders by id — the composite serves both and avoids a sort.
+  @@index([roomId, id])
 }
