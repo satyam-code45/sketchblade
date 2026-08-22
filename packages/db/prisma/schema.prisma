@@ -29,6 +29,7 @@ model User {
   updateAt  DateTime @updatedAt
   Room      Room[]
   Chat      Chat[]
+  BoardEvent BoardEvent[]
 }
 
 model Room {
@@ -42,19 +43,43 @@ model Room {
   createdAt DateTime @default(now())
   updateAt  DateTime @updatedAt
   Chat      Chat[]
+  BoardEvent BoardEvent[]
 }
 
 model Chat {
   id Int @id @default(autoincrement())
 
   message String
+  // user | ai | system; AI replies have no author
+  kind String @default("user")
 
   roomId Int
   room   Room @relation(fields: [roomId], references: [id])
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 
-  // Replay filters by room and orders by id — the composite serves both and avoids a sort.
+  createdAt DateTime @default(now())
+
+  // paging filters by room, orders by id
+  @@index([roomId, id])
+}
+
+// Append-only board mutations, replayed per room to rebuild the canvas.
+model BoardEvent {
+  id     Int    @id @default(autoincrement())
+  roomId Int
+  userId String
+
+  // shape_upsert | shape_erase | snapshot
+  kind    String
+  // Raw JSON string, not Json — nothing queries inside it.
+  payload String
+
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
   @@index([roomId, id])
 }
