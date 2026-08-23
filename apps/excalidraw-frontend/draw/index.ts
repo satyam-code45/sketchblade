@@ -232,7 +232,7 @@ export class Game {
       const removed = this.existingShapes.find((s) => s.id === last.shapeId);
       this.existingShapes = this.existingShapes.filter((s) => s.id !== last.shapeId);
       this.socket.send(JSON.stringify({
-        type: "chat",
+        type: "board",
         roomId: Number(this.roomId),
         message: JSON.stringify({ erase: [last.shapeId] }),
       }));
@@ -281,7 +281,7 @@ export class Game {
       const ids = next.shapes.map((s) => s.id!).filter(Boolean);
       this.existingShapes = this.existingShapes.filter((s) => !(s.id && ids.includes(s.id)));
       this.socket.send(JSON.stringify({
-        type: "chat",
+        type: "board",
         roomId: Number(this.roomId),
         message: JSON.stringify({ erase: ids }),
       }));
@@ -403,7 +403,7 @@ export class Game {
     this.emitSelectionChange();
     this.clearCanvas();
     this.socket.send(JSON.stringify({
-      type: "chat",
+      type: "board",
       roomId: Number(this.roomId),
       message: JSON.stringify({ erase: ids }),
     }));
@@ -451,7 +451,7 @@ export class Game {
 
   private broadcastShapeUpdate(shape: Shape) {
     this.socket.send(JSON.stringify({
-      type: "chat",
+      type: "board",
       roomId: Number(this.roomId),
       message: JSON.stringify({ shape }),
     }));
@@ -919,14 +919,14 @@ export class Game {
   // ── Socket ────────────────────────────────────────────────────────────────
   private socketMsgHandler = (event: MessageEvent) => {
     const msg = JSON.parse(event.data);
-    if (msg.type === "chat_failed") {
+    if (msg.type === "board_failed") {
       // The server couldn't persist this operation (e.g. a cold Neon/DB connection
       // timing out) and deliberately didn't broadcast it. It's already rendered
       // locally, so surface this loudly rather than let it silently vanish on reload.
       console.error(`[draw] a change to room ${msg.roomId} failed to save — it will not persist or sync to other clients.`);
       return;
     }
-    if (msg.type !== "chat") return;
+    if (msg.type !== "board") return;
 
     let data: { shape?: Shape; erase?: string[] };
     try { data = JSON.parse(msg.message); } catch { return; }
@@ -1296,7 +1296,7 @@ export class Game {
         this.pendingErasedIds = new Set();
         this.pendingErasedShapes = [];
         this.socket.send(JSON.stringify({
-          type: "chat",
+          type: "board",
           roomId: Number(this.roomId),
           message: JSON.stringify({ erase: ids }),
         }));

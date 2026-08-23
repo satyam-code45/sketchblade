@@ -97,7 +97,7 @@ wss.on("connection", function connection(ws, request) {
         return;
       }
 
-      if (parsedData.type === "chat") {
+      if (parsedData.type === "board") {
         const roomId = parsedData.roomId as number;
         const message = parsedData.message as string;
 
@@ -108,7 +108,8 @@ wss.on("connection", function connection(ws, request) {
         let lastErr: unknown;
         for (let attempt = 0; attempt < 2 && !persisted; attempt++) {
           try {
-            await prismaClient.chat.create({ data: { roomId, message, userId } });
+            const kind = message.includes('"erase"') ? "shape_erase" : "shape_upsert";
+            await prismaClient.boardEvent.create({ data: { roomId, userId, kind, payload: message } });
             persisted = true;
           } catch (err) {
             lastErr = err;
@@ -117,19 +118,19 @@ wss.on("connection", function connection(ws, request) {
         }
 
         if (!persisted) {
-          console.error(`[ws] failed to persist chat for room ${roomId} after retry:`, lastErr);
+          console.error(`[ws] failed to persist board event for room ${roomId} after retry:`, lastErr);
           // Never broadcast what didn't actually save — otherwise everyone else sees the
           // shape live while a page refresh (which replays from the DB) never will,
           // silently diverging. Tell the sender instead so their client can react.
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "chat_failed", roomId }));
+            ws.send(JSON.stringify({ type: "board_failed", roomId }));
           }
           return;
         }
 
         users.forEach((user) => {
           if (user.rooms.includes(String(roomId)) && user.ws.readyState === WebSocket.OPEN) {
-            user.ws.send(JSON.stringify({ type: "chat", message, roomId }));
+            user.ws.send(JSON.stringify({ type: "board", message, roomId }));
           }
         });
       }
