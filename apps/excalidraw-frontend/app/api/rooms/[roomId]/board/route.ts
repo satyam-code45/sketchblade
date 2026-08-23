@@ -9,13 +9,13 @@ export async function GET(
   const id = Number(roomId);
   if (isNaN(id)) return NextResponse.json({ message: "Invalid room ID" }, { status: 400 });
 
-  // No `take` here on purpose. These rows are an event log, not a message list —
-  // the client replays all of them to rebuild the board, so windowing from either
-  // end drops shapes. Bounded properly by snapshot compaction (spec 01).
-  const messages = await prismaClient.chat.findMany({
+  // No cap: these are replayed from the start to rebuild the board, so
+  // dropping events from either end loses shapes.
+  const events = await prismaClient.boardEvent.findMany({
     where: { roomId: id },
     orderBy: { id: "asc" },
+    select: { payload: true },
   });
 
-  return NextResponse.json({ messages });
+  return NextResponse.json({ events: events.map((e) => e.payload) });
 }

@@ -3,16 +3,16 @@ import axios from "axios";
 import { Shape } from ".";
 
 export async function getExistingShape(roomId: string): Promise<Shape[]> {
-  const res = await axios.get(`${HTTP_BACKEND}/chats/${roomId}`);
-  // Messages are already in chronological order (asc by id)
-  const messages: { message: string }[] = res.data.messages;
+  const res = await axios.get(`${HTTP_BACKEND}/rooms/${roomId}/board`);
+  // Already in chronological order (asc by id)
+  const events: string[] = res.data.events;
 
   const shapes: Shape[] = [];
 
-  for (const msg of messages) {
+  for (const payload of events) {
     let data: { shape?: Shape; erase?: string[] };
     try {
-      data = JSON.parse(msg.message);
+      data = JSON.parse(payload);
     } catch {
       continue;
     }
