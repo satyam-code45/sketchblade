@@ -10,21 +10,22 @@ export async function getExistingShape(roomId: string): Promise<Shape[]> {
   const shapes: Shape[] = [];
 
   for (const payload of events) {
-    let data: { shape?: Shape; erase?: string[] };
+    let data: { shape?: Shape; shapes?: Shape[]; erase?: string[] };
     try {
       data = JSON.parse(payload);
     } catch {
       continue;
     }
 
-    if (data.shape) {
-      // Assign fallback id to legacy shapes that were saved before we added ids
-      const s = data.shape as Shape & { id?: string };
-      if (!s.id) s.id = `_lg_${shapes.length}`;
-      // Later messages with the same id are moves/resizes/recolors — replace, don't duplicate
-      const idx = shapes.findIndex((existing) => existing.id === s.id);
-      if (idx >= 0) shapes[idx] = s;
-      else shapes.push(s);
+    if (data.shape || data.shapes) {
+      for (const s of (data.shapes ?? [data.shape!]) as (Shape & { id?: string })[]) {
+        // Legacy shapes were saved before ids existed
+        if (!s.id) s.id = `_lg_${shapes.length}`;
+        // Same id later means a move/resize/recolor — replace, don't duplicate
+        const idx = shapes.findIndex((existing) => existing.id === s.id);
+        if (idx >= 0) shapes[idx] = s;
+        else shapes.push(s);
+      }
     } else if (data.erase && Array.isArray(data.erase)) {
       const ids = new Set(data.erase as string[]);
       for (let i = shapes.length - 1; i >= 0; i--) {

@@ -959,14 +959,16 @@ export class Game {
     }
     if (msg.type !== "board") return;
 
-    let data: { shape?: Shape; erase?: string[] };
+    let data: { shape?: Shape; shapes?: Shape[]; erase?: string[] };
     try { data = JSON.parse(msg.message); } catch { return; }
 
-    if (data.shape) {
-      const incoming = data.shape;
-      const idx = this.existingShapes.findIndex((s) => s.id === incoming.id);
-      if (idx >= 0) this.existingShapes[idx] = incoming;
-      else this.existingShapes.push(incoming);
+    if (data.shape || data.shapes) {
+      const incoming = data.shapes ?? [data.shape!];
+      for (const shape of incoming) {
+        const idx = this.existingShapes.findIndex((s) => s.id === shape.id);
+        if (idx >= 0) this.existingShapes[idx] = shape;
+        else this.existingShapes.push(shape);
+      }
       this.clearCanvas();
     } else if (data.erase && Array.isArray(data.erase)) {
       const ids = new Set(data.erase as string[]);
