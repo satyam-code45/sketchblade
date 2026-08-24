@@ -15,7 +15,7 @@ export type Tool =
 
 // Every shape carries an id (so erases can be replayed from the DB) and an
 // optional locked flag (locked shapes can't be moved or resized).
-type BaseShape = { id?: string; locked?: boolean };
+type BaseShape = { id?: string; locked?: boolean; version?: number };
 
 export type Shape =
   | (BaseShape & { type: "rect";        x: number; y: number; width: number; height: number; color?: string; fillColor?: string; strokeWidth?: number })
@@ -450,6 +450,9 @@ export class Game {
   }
 
   private broadcastShapeUpdate(shape: Shape) {
+    // Every shape write routes through here, so this is the only place a version
+    // needs bumping. AI edits compare against it to spot concurrent changes.
+    shape.version = (shape.version ?? 0) + 1;
     this.socket.send(JSON.stringify({
       type: "board",
       roomId: Number(this.roomId),
