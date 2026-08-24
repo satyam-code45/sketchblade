@@ -97,6 +97,7 @@ export class Game {
   // Undo history: each entry is an added shape id, a set of erased shapes, or pre-mutation snapshots
   private history: Array<
     | { type: "add"; shapeId: string }
+    | { type: "batch"; shapeIds: string[] }
     | { type: "erase"; shapes: Shape[] }
     | { type: "update"; before: Shape[] }
   > = [];
@@ -109,6 +110,7 @@ export class Game {
   // edit would resurrect a timeline that no longer makes sense.
   private redoStack: Array<
     | { type: "add"; shape: Shape }
+    | { type: "batch"; shapes: Shape[] }
     | { type: "erase"; shapes: Shape[] }
     | { type: "update"; after: Shape[] }
   > = [];
@@ -224,6 +226,20 @@ export class Game {
     this.broadcastShapeUpdate(shape);
   }
 
+  // Bulk insert as one unit: one history entry, one frame. An AI-generated
+  // diagram should be one Ctrl+Z, not thirty.
+  addShapes(shapes: Shape[]) {
+    if (shapes.length === 0) return;
+    shapes.forEach((s) => { if (!s.id) (s as Shape & { id: string }).id = genId(); });
+    this.existingShapes.push(...shapes);
+    this.history.push({ type: "batch", shapeIds: shapes.map((s) => s.id!) });
+    this.redoStack = [];
+    this.selectedIds = new Set(shapes.map((s) => s.id!));
+    this.emitSelectionChange();
+    this.clearCanvas();
+    this.broadcastShapes(shapes);
+  }
+
   undo() {
     if (this.history.length === 0) return;
     const last = this.history.pop()!;
@@ -231,14 +247,16 @@ export class Game {
     if (last.type === "add") {
       const removed = this.existingShapes.find((s) => s.id === last.shapeId);
       this.existingShapes = this.existingShapes.filter((s) => s.id !== last.shapeId);
-      this.socket.send(JSON.stringify({
-        type: "board",
-        roomId: Number(this.roomId),
-        message: JSON.stringify({ erase: [last.shapeId] }),
-      }));
+      this.sendErase([last.shapeId]);
       // Snapshot what was actually removed so redo can bring back exactly that (not
       // whatever the shape looked like at draw-time, in case it was edited since).
       if (removed) this.redoStack.push({ type: "add", shape: structuredClone(removed) });
+
+    } else if (last.type === "batch") {
+      const removed = this.existingShapes.filter((s) => s.id && last.shapeIds.includes(s.id));
+      this.existingShapes = this.existingShapes.filter((s) => !(s.id && last.shapeIds.includes(s.id)));
+      this.sendErase(last.shapeIds);
+      this.redoStack.push({ type: "batch", shapes: removed.map((s) => structuredClone(s)) });
 
     } else if (last.type === "erase") {
       last.shapes.forEach((s) => this.existingShapes.push(s));
@@ -277,14 +295,15 @@ export class Game {
       this.broadcastShapeUpdate(next.shape);
       this.history.push({ type: "add", shapeId: next.shape.id! });
 
+    } else if (next.type === "batch") {
+      this.existingShapes.push(...next.shapes);
+      this.broadcastShapes(next.shapes);
+      this.history.push({ type: "batch", shapeIds: next.shapes.map((s) => s.id!) });
+
     } else if (next.type === "erase") {
       const ids = next.shapes.map((s) => s.id!).filter(Boolean);
       this.existingShapes = this.existingShapes.filter((s) => !(s.id && ids.includes(s.id)));
-      this.socket.send(JSON.stringify({
-        type: "board",
-        roomId: Number(this.roomId),
-        message: JSON.stringify({ erase: ids }),
-      }));
+      this.sendErase(ids);
       this.history.push({ type: "erase", shapes: next.shapes });
 
     } else if (next.type === "update") {
@@ -402,11 +421,7 @@ export class Game {
     this.selectedIds.clear();
     this.emitSelectionChange();
     this.clearCanvas();
-    this.socket.send(JSON.stringify({
-      type: "board",
-      roomId: Number(this.roomId),
-      message: JSON.stringify({ erase: ids }),
-    }));
+    this.sendErase(ids);
   }
 
   // Toggles lock on the current selection — a locked shape can still be selected/recolored
@@ -458,6 +473,19 @@ export class Game {
       roomId: Number(this.roomId),
       message: JSON.stringify({ shape }),
     }));
+  }
+
+  private broadcastShapes(shapes: Shape[]) {
+    shapes.forEach((s) => { s.version = (s.version ?? 0) + 1; });
+    this.socket.send(JSON.stringify({
+      type: "board",
+      roomId: Number(this.roomId),
+      message: JSON.stringify({ shapes }),
+    }));
+  }
+
+  private sendErase(ids: string[]) {
+    this.sendErase(ids);
   }
 
   destory() {
@@ -1298,11 +1326,7 @@ export class Game {
         this.history.push({ type: "erase", shapes: [...this.pendingErasedShapes] });
         this.pendingErasedIds = new Set();
         this.pendingErasedShapes = [];
-        this.socket.send(JSON.stringify({
-          type: "board",
-          roomId: Number(this.roomId),
-          message: JSON.stringify({ erase: ids }),
-        }));
+        this.sendErase(ids);
       }
       this.clearCanvas();
       return;
