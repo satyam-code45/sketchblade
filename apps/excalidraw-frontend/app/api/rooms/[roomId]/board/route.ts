@@ -9,13 +9,32 @@ export async function GET(
   const id = Number(roomId);
   if (isNaN(id)) return NextResponse.json({ message: "Invalid room ID" }, { status: 400 });
 
-  // No cap: these are replayed from the start to rebuild the board, so
-  // dropping events from either end loses shapes.
-  const events = await prismaClient.boardEvent.findMany({
-    where: { roomId: id },
-    orderBy: { id: "asc" },
-    select: { payload: true },
+  const snapshot = await prismaClient.boardEvent.findFirst({
+    where: { roomId: id, kind: "snapshot" },
+    orderBy: { id: "desc" },
   });
 
-  return NextResponse.json({ events: events.map((e) => e.payload) });
+  // A snapshot records the last event it covers, so a draw that landed while it
+  // was being written is still replayed rather than swallowed.
+  let upTo = 0;
+  let shapes: unknown[] = [];
+  if (snapshot) {
+    try {
+      const parsed = JSON.parse(snapshot.payload);
+      upTo = parsed.upTo ?? 0;
+      shapes = parsed.shapes ?? [];
+    } catch {}
+  }
+
+  const events = await prismaClient.boardEvent.findMany({
+    where: { roomId: id, kind: { not: "snapshot" }, id: { gt: upTo } },
+    orderBy: { id: "asc" },
+    select: { id: true, payload: true },
+  });
+
+  return NextResponse.json({
+    shapes,
+    events: events.map((e) => e.payload),
+    lastEventId: events.at(-1)?.id ?? upTo,
+  });
 }

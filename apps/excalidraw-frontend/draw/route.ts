@@ -2,12 +2,13 @@ import { HTTP_BACKEND } from "@/config";
 import axios from "axios";
 import { Shape } from ".";
 
-export async function getExistingShape(roomId: string): Promise<Shape[]> {
+export type BoardLoad = { shapes: Shape[]; tailLength: number; lastEventId: number };
+
+export async function getExistingShape(roomId: string): Promise<BoardLoad> {
   const res = await axios.get(`${HTTP_BACKEND}/rooms/${roomId}/board`);
   // Already in chronological order (asc by id)
   const events: string[] = res.data.events;
-
-  const shapes: Shape[] = [];
+  const shapes: Shape[] = res.data.shapes ?? [];
 
   for (const payload of events) {
     let data: { shape?: Shape; shapes?: Shape[]; erase?: string[] };
@@ -35,5 +36,5 @@ export async function getExistingShape(roomId: string): Promise<Shape[]> {
     }
   }
 
-  return shapes;
+  return { shapes, tailLength: events.length, lastEventId: res.data.lastEventId ?? 0 };
 }

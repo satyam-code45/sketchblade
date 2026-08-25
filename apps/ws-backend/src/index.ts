@@ -108,7 +108,8 @@ wss.on("connection", function connection(ws, request) {
         let lastErr: unknown;
         for (let attempt = 0; attempt < 2 && !persisted; attempt++) {
           try {
-            const kind = message.includes('"erase"') ? "shape_erase" : "shape_upsert";
+            const kind = message.includes('"snapshot"') ? "snapshot"
+              : message.includes('"erase"') ? "shape_erase" : "shape_upsert";
             await prismaClient.boardEvent.create({ data: { roomId, userId, kind, payload: message } });
             persisted = true;
           } catch (err) {
@@ -127,6 +128,9 @@ wss.on("connection", function connection(ws, request) {
           }
           return;
         }
+
+        // Snapshots are a storage detail, not a board change — nobody needs them pushed.
+        if (message.includes('"snapshot"')) return;
 
         users.forEach((user) => {
           if (user.rooms.includes(String(roomId)) && user.ws.readyState === WebSocket.OPEN) {

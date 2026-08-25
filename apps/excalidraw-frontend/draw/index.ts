@@ -63,6 +63,8 @@ const FILLABLE_TYPES = new Set<Shape["type"]>(["rect", "ellipse", "diamond"]);
 // Shapes with an adjustable stroke/border width
 const STROKE_WIDTH_TYPES = new Set<Shape["type"]>(["rect", "ellipse", "diamond", "arrow", "line", "pencil"]);
 
+const SNAPSHOT_EVERY = 500;
+
 const genId = () => Math.random().toString(36).slice(2, 10);
 
 export class Game {
@@ -943,8 +945,20 @@ export class Game {
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async init() {
-    this.existingShapes = await getExistingShape(this.roomId);
+    const { shapes, tailLength, lastEventId } = await getExistingShape(this.roomId);
+    this.existingShapes = shapes;
     this.clearCanvas();
+    // Compacted from the client because it already holds the materialised board;
+    // server-side would mean a second copy of the replay logic.
+    if (tailLength >= SNAPSHOT_EVERY) this.sendSnapshot(lastEventId);
+  }
+
+  private sendSnapshot(upTo: number) {
+    this.socket.send(JSON.stringify({
+      type: "board",
+      roomId: Number(this.roomId),
+      message: JSON.stringify({ snapshot: true, upTo, shapes: this.existingShapes }),
+    }));
   }
 
   // ── Socket ────────────────────────────────────────────────────────────────
