@@ -30,6 +30,8 @@ model User {
   Room      Room[]
   Chat      Chat[]
   BoardEvent BoardEvent[]
+  AICredential AICredential[]
+  AIPreference AIPreference?
 }
 
 model Room {
@@ -82,4 +84,44 @@ model BoardEvent {
   user User @relation(fields: [userId], references: [id])
 
   @@index([roomId, id])
+}
+
+// Encrypted, not hashed: we need the key back to call the provider.
+model AICredential {
+  id       String @id @default(uuid())
+  userId   String
+  provider String
+  label    String
+
+  ciphertext Bytes
+  iv         Bytes
+  authTag    Bytes
+  keyVersion Int    @default(1)
+
+  // sha256 of the raw key, so duplicates are caught without decrypting
+  fingerprint String
+  last4       String
+
+  lastUsedAt  DateTime?
+  lastValidAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([userId, provider])
+}
+
+model AIPreference {
+  userId       String  @id
+  provider     String  @default("openai")
+  // null means fall back to the platform key and its free-tier quota
+  credentialId String?
+
+  modelDiagram  String?
+  modelEvaluate String?
+  modelEdit     String?
+  modelChat     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
