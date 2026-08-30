@@ -17,7 +17,7 @@ test("env overrides the default, an explicit model overrides env", () => {
 });
 
 test("cost uses the per-million price table", () => {
-  assert.equal(costOf("gpt-5.6-luna", 1_000_000, 1_000_000), 1.4);
+  assert.equal(costOf("gpt-5-nano", 1_000_000, 1_000_000), 0.45);
   assert.equal(costOf("no-such-model", 1000, 1000), 0);
 });
 
