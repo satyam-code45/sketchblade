@@ -27,7 +27,7 @@ test("every seal uses a fresh iv and produces distinct ciphertext", () => {
 
 test("tampering with the ciphertext fails the auth tag", () => {
   const sealed = seal("sk-tamper-me");
-  sealed.ciphertext[0] ^= 0xff;
+  sealed.ciphertext.writeUInt8(sealed.ciphertext.readUInt8(0) ^ 0xff, 0);
   assert.throws(() => open(sealed));
 });
 

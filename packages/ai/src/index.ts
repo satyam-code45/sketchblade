@@ -6,6 +6,10 @@ import { costOf, modelFor, FALLBACK_MODEL, type AITask } from "./models.ts";
 
 export type { AITask } from "./models.ts";
 export { AIError } from "./errors.ts";
+export { seal, open, fingerprint, last4, type SealedKey } from "./crypto.ts";
+export { redact } from "./redact.ts";
+export { resolveCredential, FREE_TIER_DAILY_CALLS, type Preference, type StoredCredential } from "./credentials.ts";
+export { PRICES, modelFor, costOf } from "./models.ts";
 
 export type AIResult<T> = {
   data: T;
@@ -83,4 +87,15 @@ export async function generate<T>(req: GenerateRequest<T>): Promise<AIResult<T>>
   }
 
   throw last ?? new AIError("unknown", "AI request failed.");
+}
+
+// Cheapest authenticated call there is, so a key is never stored unverified.
+export async function validateKey(apiKey: string): Promise<{ ok: true } | { ok: false; kind: string; message: string }> {
+  try {
+    await new OpenAI({ apiKey }).models.list();
+    return { ok: true };
+  } catch (err) {
+    const e = classify(err);
+    return { ok: false, kind: e.kind, message: e.message };
+  }
 }
