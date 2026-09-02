@@ -10,6 +10,7 @@ export { seal, open, fingerprint, last4, type SealedKey } from "./crypto.ts";
 export { redact } from "./redact.ts";
 export { resolveCredential, FREE_TIER_DAILY_CALLS, type Preference, type StoredCredential } from "./credentials.ts";
 export { PRICES, modelFor, costOf } from "./models.ts";
+export { DiagramSchema, clamp, PRESETS, type Diagram, type DiagramNode, type DiagramConnection, type PresetId } from "./diagram.ts";
 
 export type AIResult<T> = {
   data: T;
