@@ -2,8 +2,21 @@
 
 import { useState } from "react";
 import { Sparkles, X, ArrowUp, Loader2 } from "lucide-react";
-import type { Game } from "@/draw";
+import type { Game, Shape } from "@/draw";
 import { compileDiagram } from "@/draw/ai/diagram-to-shapes";
+
+// Local only: never added to the scene, never broadcast.
+function placeholderShapes(c: { x: number; y: number }): Shape[] {
+  const x = c.x - 210;
+  const y = c.y - 110;
+  return [
+    { type: "rect", x, y, width: 420, height: 220, color: "#8b5cf6", fillColor: "#f5f3ff", strokeWidth: 2 },
+    { type: "text", x: x + 24, y: y + 48, text: "Generating…", fontSize: 22, color: "#6d28d9" },
+    { type: "rect", x: x + 24, y: y + 90, width: 330, height: 16, color: "#8b5cf6", fillColor: "#ddd6fe", strokeWidth: 1 },
+    { type: "rect", x: x + 24, y: y + 126, width: 250, height: 16, color: "#8b5cf6", fillColor: "#ddd6fe", strokeWidth: 1 },
+    { type: "rect", x: x + 24, y: y + 162, width: 180, height: 16, color: "#8b5cf6", fillColor: "#ddd6fe", strokeWidth: 1 },
+  ];
+}
 
 const PRESETS = [
   { id: "diagram", label: "Diagram", hint: "General ideas and relationships" },
@@ -28,6 +41,10 @@ export default function AIPanel({ game, onClose }: Props) {
     setError("");
     setNote("");
 
+    // Generation takes tens of seconds; anchor the wait where the shapes land.
+    const centre = game.getViewportCenter();
+    game.setPreview(placeholderShapes(centre));
+
     try {
       const res = await fetch("/api/ai/diagram", {
         method: "POST",
@@ -43,18 +60,19 @@ export default function AIPanel({ game, onClose }: Props) {
       // Centre the diagram on what the user is looking at.
       const spanX = Math.max(...body.diagram.elements.map((e: { x: number; width: number }) => e.x + e.width), 0);
       const spanY = Math.max(...body.diagram.elements.map((e: { y: number; height: number }) => e.y + e.height), 0);
-      const centre = game.getViewportCenter();
       const shapes = compileDiagram(body.diagram, {
         x: centre.x - spanX / 2,
         y: centre.y - spanY / 2,
       });
 
+      game.clearPreview();
       game.addShapes(shapes);
       setNote(`${body.diagram.elements.length} nodes · ${body.model} · $${body.usage.costUsd.toFixed(4)}`);
       setPrompt("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed.");
     } finally {
+      game.clearPreview();
       setBusy(false);
     }
   };

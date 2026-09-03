@@ -139,6 +139,9 @@ export class Game {
   private currentFontSize = 20;
   private canvasColor: string | null = null; // null = follow theme default background
   private imageCache: Map<string, HTMLImageElement> = new Map();
+  // Rendered translucent on top and never broadcast or persisted. Used for the
+  // AI generating placeholder and, later, proposed edits awaiting approval.
+  private previewShapes: Shape[] = [];
 
   private onTextRequest?: (sx: number, sy: number, cx: number, cy: number) => void;
   private onZoomChange?: (zoom: number) => void;
@@ -230,6 +233,17 @@ export class Game {
 
   // Bulk insert as one unit: one history entry, one frame. An AI-generated
   // diagram should be one Ctrl+Z, not thirty.
+  setPreview(shapes: Shape[]) {
+    this.previewShapes = shapes;
+    this.clearCanvas();
+  }
+
+  clearPreview() {
+    if (this.previewShapes.length === 0) return;
+    this.previewShapes = [];
+    this.clearCanvas();
+  }
+
   addShapes(shapes: Shape[]) {
     if (shapes.length === 0) return;
     shapes.forEach((s) => { if (!s.id) (s as Shape & { id: string }).id = genId(); });
@@ -513,6 +527,11 @@ export class Game {
     ctx.lineCap     = "round";
     ctx.lineJoin    = "round";
     this.existingShapes.forEach((s) => this.drawShape(s));
+    if (this.previewShapes.length) {
+      ctx.globalAlpha = 0.45;
+      this.previewShapes.forEach((s) => this.drawShape(s));
+      ctx.globalAlpha = 1;
+    }
     this.drawSelectionOverlay();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
