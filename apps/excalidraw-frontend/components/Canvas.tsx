@@ -32,8 +32,10 @@ import {
   X,
   ZoomIn,
   ZoomOut,
+  Sparkles,
 } from "lucide-react";
 import { Game, Tool, Shape, SelectionInfo } from "@/draw";
+import AIPanel from "@/components/ai/AIPanel";
 import { uploadToCloudinary, cloudinaryVideoPoster } from "@/lib/cloudinary";
 import ThemeToggle from "./ThemeToggle";
 import React from "react";
@@ -185,6 +187,7 @@ export default function Canvas({
 
   // Selection (select tool): move/resize existing shapes, multi-select
   const [selection, setSelection] = useState<SelectionInfo>(EMPTY_SELECTION);
+  const [aiOpen, setAiOpen]       = useState(false);
 
   // ── Bootstrap game ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -912,6 +915,18 @@ export default function Canvas({
           </button>
         </div>
       )}
+
+      {/* ── AI diagram generation ── */}
+      <button
+        onClick={() => setAiOpen((v) => !v)}
+        title="Generate with AI"
+        className={`absolute bottom-4 right-4 z-30 flex h-10 items-center gap-2 rounded-xl border border-border/60 px-3 text-sm font-medium shadow-lg backdrop-blur-md transition-colors ${
+          aiOpen ? "bg-primary text-primary-foreground" : "bg-background/90 hover:bg-accent"
+        }`}
+      >
+        <Sparkles className="size-4" /> AI
+      </button>
+      {aiOpen && <AIPanel game={gameRef.current} onClose={() => setAiOpen(false)} />}
 
       {/* ── Video playback modal ── */}
       {videoModal && (
