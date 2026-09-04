@@ -32,6 +32,7 @@ model User {
   BoardEvent BoardEvent[]
   AICredential AICredential[]
   AIPreference AIPreference?
+  AIUsage      AIUsage[]
 }
 
 model Room {
@@ -124,4 +125,23 @@ model AIPreference {
   modelChat     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// One row per AI call. Feeds the free-tier counter and the cost numbers.
+model AIUsage {
+  id           String   @id @default(uuid())
+  userId       String
+  task         String
+  provider     String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float
+  // null means the call ran on the platform key and counts against the free tier
+  credentialId String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
