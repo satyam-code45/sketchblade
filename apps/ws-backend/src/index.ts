@@ -97,6 +97,23 @@ wss.on("connection", function connection(ws, request) {
         return;
       }
 
+      // Ephemeral: tells the room why shapes are about to appear. Never stored.
+      if (parsedData.type === "ai_activity") {
+        const user = users.find((x) => x.ws === ws);
+        if (!user) return;
+        const roomId = String(parsedData.roomId);
+        const payload = JSON.stringify({
+          type: "ai_activity",
+          roomId: parsedData.roomId,
+          name: user.name,
+          state: parsedData.state,
+        });
+        users.forEach((u) => {
+          if (u !== user && u.rooms.includes(roomId) && u.ws.readyState === WebSocket.OPEN) u.ws.send(payload);
+        });
+        return;
+      }
+
       if (parsedData.type === "board") {
         const roomId = parsedData.roomId as number;
         const message = parsedData.message as string;

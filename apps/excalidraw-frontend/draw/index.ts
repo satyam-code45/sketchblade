@@ -147,6 +147,7 @@ export class Game {
   private onZoomChange?: (zoom: number) => void;
   private onVideoOpen?: (shape: VideoShape) => void;
   private onSelectionChange?: (info: SelectionInfo) => void;
+  onAIActivity?: (who: string | null) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -233,6 +234,10 @@ export class Game {
 
   // Bulk insert as one unit: one history entry, one frame. An AI-generated
   // diagram should be one Ctrl+Z, not thirty.
+  broadcastAIActivity(state: "generating" | "idle") {
+    this.socket.send(JSON.stringify({ type: "ai_activity", roomId: Number(this.roomId), state }));
+  }
+
   setPreview(shapes: Shape[]) {
     this.previewShapes = shapes;
     this.clearCanvas();
@@ -988,6 +993,10 @@ export class Game {
       // timing out) and deliberately didn't broadcast it. It's already rendered
       // locally, so surface this loudly rather than let it silently vanish on reload.
       console.error(`[draw] a change to room ${msg.roomId} failed to save — it will not persist or sync to other clients.`);
+      return;
+    }
+    if (msg.type === "ai_activity") {
+      this.onAIActivity?.(msg.state === "generating" ? msg.name : null);
       return;
     }
     if (msg.type !== "board") return;

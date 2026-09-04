@@ -44,6 +44,7 @@ export default function AIPanel({ game, onClose }: Props) {
     // Generation takes tens of seconds; anchor the wait where the shapes land.
     const centre = game.getViewportCenter();
     game.setPreview(placeholderShapes(centre));
+    game.broadcastAIActivity("generating");
 
     try {
       const res = await fetch("/api/ai/diagram", {
@@ -72,6 +73,7 @@ export default function AIPanel({ game, onClose }: Props) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed.");
     } finally {
+      game.broadcastAIActivity("idle");
       game.clearPreview();
       setBusy(false);
     }

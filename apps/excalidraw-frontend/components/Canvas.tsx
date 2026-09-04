@@ -188,6 +188,7 @@ export default function Canvas({
   // Selection (select tool): move/resize existing shapes, multi-select
   const [selection, setSelection] = useState<SelectionInfo>(EMPTY_SELECTION);
   const [aiOpen, setAiOpen]       = useState(false);
+  const [aiBusyBy, setAiBusyBy]   = useState<string | null>(null);
 
   // ── Bootstrap game ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -202,6 +203,7 @@ export default function Canvas({
       (info) => setSelection(info)
     );
     gameRef.current = game;
+    game.onAIActivity = setAiBusyBy;
 
     // Resize (not just re-set canvas.width/height directly) so the backing buffer
     // stays scaled to devicePixelRatio — otherwise strokes/text render blurry on
@@ -913,6 +915,12 @@ export default function Canvas({
           <button onClick={() => setUploadError("")} className="ml-2 underline underline-offset-2">
             Dismiss
           </button>
+        </div>
+      )}
+
+      {aiBusyBy && (
+        <div className="absolute bottom-16 right-4 z-30 rounded-lg border border-border/60 bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur-md">
+          {aiBusyBy} is generating…
         </div>
       )}
 
