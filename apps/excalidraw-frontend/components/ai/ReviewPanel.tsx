@@ -1,0 +1,211 @@
+"use client";
+
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
+import type { Game, Shape } from "@/draw";
+import { serializeBoard } from "@/draw/ai/serialize-board";
+import { classifyDiff, applyToShape, type Change } from "@/draw/ai/apply-diff";
+
+type Finding = {
+  severity: "critical" | "warning" | "suggestion";
+  category: string;
+  title: string;
+  detail: string;
+  suggestion: string;
+  refs: string[];
+};
+
+const SEVERITY: Record<string, string> = {
+  critical: "text-destructive",
+  warning: "text-amber-500",
+  suggestion: "text-muted-foreground",
+};
+
+const STATUS_NOTE: Record<string, string> = {
+  stale: "changed by someone else",
+  orphaned: "no longer on the board",
+};
+
+const auth = () => ({
+  authorization: localStorage.getItem("token") ?? "",
+  "content-type": "application/json",
+});
+
+export default function ReviewPanel({ game }: { game: Game | null }) {
+  const [busy, setBusy] = useState<"evaluate" | "edit" | null>(null);
+  const [error, setError] = useState("");
+  const [findings, setFindings] = useState<Finding[] | null>(null);
+  const [summary, setSummary] = useState("");
+  const [instruction, setInstruction] = useState("");
+  const [changes, setChanges] = useState<Change[] | null>(null);
+  const [rejected, setRejected] = useState<Set<number>>(new Set());
+  const [rationale, setRationale] = useState("");
+
+  const evaluate = async () => {
+    if (!game) return;
+    setBusy("evaluate");
+    setError("");
+    setFindings(null);
+    try {
+      const board = serializeBoard(game.existingShapes).text;
+      const res = await fetch("/api/ai/evaluate", { method: "POST", headers: auth(), body: JSON.stringify({ board }) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message);
+      setFindings(body.evaluation.findings);
+      setSummary(body.evaluation.summary);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Evaluation failed.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const propose = async (text: string) => {
+    if (!game || text.trim().length < 3) return;
+    setBusy("edit");
+    setError("");
+    try {
+      const view = serializeBoard(game.existingShapes);
+      const res = await fetch("/api/ai/edit", {
+        method: "POST",
+        headers: auth(),
+        body: JSON.stringify({ board: view.text, instruction: text.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message);
+
+      // Re-checked against live state, not the snapshot the model saw.
+      const classified = classifyDiff(body.diff, view.byAlias, game.existingShapes);
+      setChanges(classified);
+      setRationale(body.diff.rationale);
+      setRejected(new Set());
+      game.setPreview(classified.filter((c) => c.kind === "add" && c.status === "applicable").map((c) => c.shape));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not work out an edit.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const discard = () => {
+    game?.clearPreview();
+    setChanges(null);
+    setRationale("");
+  };
+
+  const accept = () => {
+    if (!game || !changes) return;
+    const live = changes.filter((c, i) => c.status === "applicable" && !rejected.has(i));
+    game.clearPreview();
+    game.applyDiff({
+      add: live.filter((c): c is Extract<Change, { kind: "add" }> => c.kind === "add").map((c) => c.shape as Shape),
+      modify: live
+        .filter((c): c is Extract<Change, { kind: "modify" }> => c.kind === "modify")
+        .map((c) => ({ id: c.id, apply: (s: Shape) => applyToShape(s, c.field, c.value) })),
+      removeIds: live.filter((c) => c.kind === "remove").map((c) => c.id),
+    });
+    setChanges(null);
+    setRationale("");
+  };
+
+  const skipped = changes?.filter((c) => c.status !== "applicable").length ?? 0;
+
+  return (
+    <div className="space-y-3">
+      {!changes && (
+        <>
+          <button
+            onClick={evaluate}
+            disabled={busy !== null}
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border/60 text-sm font-medium hover:bg-accent disabled:opacity-50"
+          >
+            {busy === "evaluate" && <Loader2 className="size-4 animate-spin" />}
+            Review this board
+          </button>
+
+          {summary && <p className="text-xs text-muted-foreground">{summary}</p>}
+
+          {findings?.map((f, i) => (
+            <div key={i} className="rounded-lg border border-border/60 p-2.5">
+              <p className={`text-xs font-medium ${SEVERITY[f.severity]}`}>
+                {f.severity} · {f.category}
+              </p>
+              <p className="mt-0.5 text-sm font-medium">{f.title}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{f.detail}</p>
+              <button
+                onClick={() => propose(f.suggestion)}
+                disabled={busy !== null}
+                className="mt-2 rounded-md border border-border/60 px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
+              >
+                Apply this
+              </button>
+            </div>
+          ))}
+
+          <div className="flex gap-2">
+            <input
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && propose(instruction)}
+              placeholder="Or describe a change…"
+              className="h-9 flex-1 rounded-lg border border-border/60 bg-background px-3 text-sm outline-none focus:border-ring"
+            />
+            <button
+              onClick={() => propose(instruction)}
+              disabled={busy !== null || instruction.trim().length < 3}
+              className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {busy === "edit" ? <Loader2 className="size-4 animate-spin" /> : "Propose"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {changes && (
+        <>
+          <p className="text-xs text-muted-foreground">{rationale}</p>
+          {skipped > 0 && (
+            <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-600">
+              {skipped} change{skipped > 1 ? "s" : ""} skipped — the board moved while the AI was thinking.
+            </p>
+          )}
+
+          <ul className="max-h-56 space-y-1 overflow-y-auto">
+            {changes.map((c, i) => (
+              <li key={i} className="flex items-start gap-2 rounded-md border border-border/60 px-2 py-1.5 text-xs">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  disabled={c.status !== "applicable"}
+                  checked={c.status === "applicable" && !rejected.has(i)}
+                  onChange={() =>
+                    setRejected((r) => {
+                      const next = new Set(r);
+                      next.has(i) ? next.delete(i) : next.add(i);
+                      return next;
+                    })
+                  }
+                />
+                <span className={c.status === "applicable" ? "" : "text-muted-foreground line-through"}>
+                  {c.describe}
+                  {c.status !== "applicable" && <span className="ml-1 no-underline">({STATUS_NOTE[c.status]})</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex gap-2">
+            <button onClick={accept} className="h-9 flex-1 rounded-lg bg-primary text-sm font-medium text-primary-foreground">
+              Accept
+            </button>
+            <button onClick={discard} className="h-9 rounded-lg border border-border/60 px-3 text-sm hover:bg-accent">
+              Discard
+            </button>
+          </div>
+        </>
+      )}
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
