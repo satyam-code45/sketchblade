@@ -100,6 +100,7 @@ export class Game {
   private history: Array<
     | { type: "add"; shapeId: string }
     | { type: "batch"; shapeIds: string[] }
+    | { type: "diff"; addedIds: string[]; before: Shape[]; removed: Shape[] }
     | { type: "erase"; shapes: Shape[] }
     | { type: "update"; before: Shape[] }
   > = [];
@@ -113,6 +114,7 @@ export class Game {
   private redoStack: Array<
     | { type: "add"; shape: Shape }
     | { type: "batch"; shapes: Shape[] }
+    | { type: "diff"; added: Shape[]; after: Shape[]; removedIds: string[] }
     | { type: "erase"; shapes: Shape[] }
     | { type: "update"; after: Shape[] }
   > = [];
@@ -238,6 +240,36 @@ export class Game {
     this.socket.send(JSON.stringify({ type: "ai_activity", roomId: Number(this.roomId), state }));
   }
 
+  // An accepted AI diff lands as one entry and one frame: adds, edits and
+  // removals together are a single change to undo.
+  applyDiff(opts: { add: Shape[]; modify: Array<{ id: string; apply: (s: Shape) => Shape }>; removeIds: string[] }) {
+    const before: Shape[] = [];
+    opts.modify.forEach(({ id, apply }) => {
+      const idx = this.existingShapes.findIndex((s) => s.id === id);
+      if (idx < 0) return;
+      before.push(structuredClone(this.existingShapes[idx]!));
+      this.existingShapes[idx] = { ...apply(this.existingShapes[idx]!), id } as Shape;
+    });
+
+    const removed = this.existingShapes.filter((s) => s.id && opts.removeIds.includes(s.id));
+    if (removed.length) {
+      this.existingShapes = this.existingShapes.filter((s) => !(s.id && opts.removeIds.includes(s.id)));
+    }
+
+    opts.add.forEach((s) => { if (!s.id) (s as Shape & { id: string }).id = genId(); });
+    this.existingShapes.push(...opts.add);
+
+    this.history.push({ type: "diff", addedIds: opts.add.map((s) => s.id!), before, removed });
+    this.redoStack = [];
+    this.selectedIds = new Set(opts.add.map((s) => s.id!));
+    this.emitSelectionChange();
+    this.clearCanvas();
+
+    const changed = [...opts.add, ...this.existingShapes.filter((s) => before.some((b) => b.id === s.id))];
+    if (changed.length) this.broadcastShapes(changed);
+    if (removed.length) this.sendErase(removed.map((s) => s.id!));
+  }
+
   setPreview(shapes: Shape[]) {
     this.previewShapes = shapes;
     this.clearCanvas();
@@ -278,6 +310,20 @@ export class Game {
       this.existingShapes = this.existingShapes.filter((s) => !(s.id && last.shapeIds.includes(s.id)));
       this.sendErase(last.shapeIds);
       this.redoStack.push({ type: "batch", shapes: removed.map((s) => structuredClone(s)) });
+
+    } else if (last.type === "diff") {
+      const after = last.before.map((b) => structuredClone(this.existingShapes.find((s) => s.id === b.id) ?? b));
+      const added = this.existingShapes.filter((s) => s.id && last.addedIds.includes(s.id)).map((s) => structuredClone(s));
+      this.existingShapes = this.existingShapes.filter((s) => !(s.id && last.addedIds.includes(s.id)));
+      last.before.forEach((b) => {
+        const idx = this.existingShapes.findIndex((s) => s.id === b.id);
+        if (idx >= 0) this.existingShapes[idx] = b;
+      });
+      last.removed.forEach((s) => this.existingShapes.push(s));
+      if (last.addedIds.length) this.sendErase(last.addedIds);
+      const restored = [...last.before, ...last.removed];
+      if (restored.length) this.broadcastShapes(restored);
+      this.redoStack.push({ type: "diff", added, after, removedIds: last.removed.map((s) => s.id!) });
 
     } else if (last.type === "erase") {
       last.shapes.forEach((s) => this.existingShapes.push(s));
@@ -320,6 +366,19 @@ export class Game {
       this.existingShapes.push(...next.shapes);
       this.broadcastShapes(next.shapes);
       this.history.push({ type: "batch", shapeIds: next.shapes.map((s) => s.id!) });
+
+    } else if (next.type === "diff") {
+      const before = next.after.map((a) => structuredClone(this.existingShapes.find((s) => s.id === a.id) ?? a));
+      const removed = this.existingShapes.filter((s) => s.id && next.removedIds.includes(s.id)).map((s) => structuredClone(s));
+      this.existingShapes = this.existingShapes.filter((s) => !(s.id && next.removedIds.includes(s.id)));
+      next.after.forEach((a) => {
+        const idx = this.existingShapes.findIndex((s) => s.id === a.id);
+        if (idx >= 0) this.existingShapes[idx] = a;
+      });
+      this.existingShapes.push(...next.added);
+      if (next.removedIds.length) this.sendErase(next.removedIds);
+      this.broadcastShapes([...next.added, ...next.after]);
+      this.history.push({ type: "diff", addedIds: next.added.map((s) => s.id!), before, removed });
 
     } else if (next.type === "erase") {
       const ids = next.shapes.map((s) => s.id!).filter(Boolean);

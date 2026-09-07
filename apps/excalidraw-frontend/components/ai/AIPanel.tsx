@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sparkles, X, ArrowUp, Loader2 } from "lucide-react";
 import type { Game, Shape } from "@/draw";
 import { compileDiagram } from "@/draw/ai/diagram-to-shapes";
+import ReviewPanel from "@/components/ai/ReviewPanel";
 
 // Local only: never added to the scene, never broadcast.
 function placeholderShapes(c: { x: number; y: number }): Shape[] {
@@ -29,6 +30,7 @@ const PRESETS = [
 type Props = { game: Game | null; onClose: () => void };
 
 export default function AIPanel({ game, onClose }: Props) {
+  const [tab, setTab] = useState<"generate" | "review">("generate");
   const [preset, setPreset] = useState<string>("diagram");
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -90,6 +92,24 @@ export default function AIPanel({ game, onClose }: Props) {
         </button>
       </div>
 
+      <div className="mb-3 flex rounded-lg bg-muted/60 p-0.5">
+        {(["generate", "review"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+              tab === t ? "bg-background shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === "review" && <ReviewPanel game={game} />}
+
+      {tab === "generate" && (
+      <>
       <div className="mb-3 grid grid-cols-2 gap-1.5">
         {PRESETS.map((p) => (
           <button
@@ -131,6 +151,8 @@ export default function AIPanel({ game, onClose }: Props) {
       {note && <p className="mt-2 text-xs text-muted-foreground">{note}</p>}
       {!error && !note && (
         <p className="mt-2 text-[11px] text-muted-foreground">Everyone in the room sees it appear. ⌘↵ to generate.</p>
+      )}
+      </>
       )}
     </div>
   );
