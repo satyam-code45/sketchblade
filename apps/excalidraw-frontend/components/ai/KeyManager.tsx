@@ -32,23 +32,31 @@ type Preference = Partial<Record<(typeof TASKS)[number]["field"], string | null>
   credentialId?: string | null;
 };
 
+type Usage = {
+  freeUsedToday: number;
+  byTask: { task: string; calls: number; costUsd: number; tokens: number }[];
+};
+
 export default function KeyManager() {
   const [keys, setKeys] = useState<StoredKey[]>([]);
   const [pref, setPref] = useState<Preference>({});
   const [label, setLabel] = useState("");
   const [key, setKey] = useState("");
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const auth = () => ({ authorization: localStorage.getItem("token") ?? "" });
 
   const load = useCallback(async () => {
-    const [k, p] = await Promise.all([
+    const [k, p, u] = await Promise.all([
       fetch("/api/ai/keys", { headers: auth() }).then((r) => r.json()),
       fetch("/api/ai/preferences", { headers: auth() }).then((r) => r.json()),
+      fetch("/api/ai/usage", { headers: auth() }).then((r) => r.json()),
     ]);
     setKeys(k.keys ?? []);
     setPref(p.preference ?? {});
+    setUsage(u.byTask ? u : null);
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -138,6 +146,33 @@ export default function KeyManager() {
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </section>
+
+      {usage && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium">Usage, last 30 days</h2>
+          {keys.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              {usage.freeUsedToday} free call{usage.freeUsedToday === 1 ? "" : "s"} used today.
+            </p>
+          )}
+          {usage.byTask.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No AI calls yet.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <tbody>
+                {usage.byTask.map((r) => (
+                  <tr key={r.task} className="border-b border-border/40 last:border-0">
+                    <td className="py-1.5 capitalize">{r.task}</td>
+                    <td className="py-1.5 text-right text-muted-foreground">{r.calls} calls</td>
+                    <td className="py-1.5 text-right text-muted-foreground">{r.tokens.toLocaleString()} tokens</td>
+                    <td className="py-1.5 text-right font-medium">${r.costUsd.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium">Model per task</h2>
