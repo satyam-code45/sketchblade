@@ -5,7 +5,7 @@ import { AIError, classify, RETRYABLE } from "./errors.ts";
 import { costOf, modelFor, FALLBACK_MODEL, type AITask } from "./models.ts";
 
 export type { AITask } from "./models.ts";
-export { AIError } from "./errors.ts";
+export { AIError, isAIError } from "./errors.ts";
 export { seal, open, fingerprint, last4, type SealedKey } from "./crypto.ts";
 export { redact } from "./redact.ts";
 export { resolveCredential, FREE_TIER_DAILY_CALLS, type Preference, type StoredCredential } from "./credentials.ts";

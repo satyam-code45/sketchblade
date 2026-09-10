@@ -12,6 +12,12 @@ export class AIError extends Error {
   }
 }
 
+// instanceof is unreliable here: the package can be loaded more than once and
+// Prisma re-throws across a transaction boundary. Check the shape instead.
+export function isAIError(err: unknown): err is AIError {
+  return Boolean(err) && (err as AIError).name === "AIError" && typeof (err as AIError).kind === "string";
+}
+
 const BY_STATUS: Record<number, AIErrorKind> = {
   401: "auth", 403: "auth", 408: "timeout", 429: "rate_limit",
   500: "overloaded", 502: "overloaded", 503: "overloaded", 504: "overloaded",

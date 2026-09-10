@@ -13,7 +13,6 @@ A real-time collaborative drawing platform inspired by Excalidraw, built with mo
 - **Room-based Sessions**: Create and join rooms with unique slugs and optional passwords
 - **User Authentication**: Sign up, sign in, forgot password, and change password flows
 - **Presence**: See who else is currently in the room
-- **Live Chat**: Per-room chat alongside the canvas
 - **Resilient Connect Flow**: Polls the realtime server's health before joining a room, so a cold-started free-tier backend shows a clear "waking up" message instead of an endless spinner
 
 ## Tech Stack

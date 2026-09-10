@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { callAI } from "@/lib/ai-call";
-import { EvaluationSchema, EVALUATE_SYSTEM, AIError } from "@repo/ai";
+import { log } from "@/lib/log";
+import { EvaluationSchema, EVALUATE_SYSTEM, isAIError } from "@repo/ai";
 
 export async function POST(req: Request) {
   const userId = getUserId(req);
@@ -23,7 +24,8 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ evaluation: result.data, model: result.model, usage: result.usage });
   } catch (err) {
-    const e = err instanceof AIError ? err : null;
+    const e = isAIError(err) ? err : null;
+    log("error", "ai_call_failed", { task: "evaluate", userId, kind: e?.kind ?? "unhandled", message: e?.message ?? String(err) });
     const status = e?.kind === "auth" ? 402 : e?.kind === "rate_limit" ? 429 : 502;
     return NextResponse.json({ message: e?.message ?? "Evaluation failed." }, { status });
   }

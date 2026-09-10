@@ -32,3 +32,24 @@ test("only transient kinds retry", () => {
   assert.ok(RETRYABLE.includes(classify({ status: 429 }).kind));
   assert.ok(!RETRYABLE.includes(classify({ status: 401 }).kind));
 });
+
+test("AIError is recognised structurally, not by instanceof", async () => {
+  const { AIError, isAIError } = await import("./errors.ts");
+  const err = new AIError("rate_limit", "slow down");
+  // Same shape crossing a module boundary, where instanceof would fail.
+  const copy = Object.assign(Object.create(Object.getPrototypeOf({})), {
+    name: "AIError", kind: "rate_limit", message: "slow down",
+  });
+  assert.ok(isAIError(err));
+  assert.ok(isAIError(copy));
+  assert.ok(!isAIError(new Error("plain")));
+  assert.ok(!isAIError(null));
+});
+
+test("the retry ladder falls back to the cheap model", async () => {
+  const { modelFor, FALLBACK_MODEL } = await import("./models.ts");
+  process.env.AI_MODEL_EVALUATE = "gpt-5.6-terra";
+  const ladder = [modelFor("evaluate"), FALLBACK_MODEL];
+  assert.deepEqual(ladder, ["gpt-5.6-terra", "gpt-5-nano"]);
+  delete process.env.AI_MODEL_EVALUATE;
+});

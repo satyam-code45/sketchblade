@@ -26,6 +26,17 @@ const STATUS_NOTE: Record<string, string> = {
   orphaned: "no longer on the board",
 };
 
+// A hollow box around a shape's bounds, drawn on the preview layer.
+function outlineOf(s: Shape): Shape | null {
+  if (s.type === "rect" || s.type === "diamond" || s.type === "image" || s.type === "video") {
+    return { type: "rect", x: s.x - 6, y: s.y - 6, width: s.width + 12, height: s.height + 12, color: "#f59e0b", strokeWidth: 3 };
+  }
+  if (s.type === "ellipse") {
+    return { type: "rect", x: s.centerX - s.rx - 6, y: s.centerY - s.ry - 6, width: s.rx * 2 + 12, height: s.ry * 2 + 12, color: "#f59e0b", strokeWidth: 3 };
+  }
+  return null;
+}
+
 const auth = () => ({
   authorization: localStorage.getItem("token") ?? "",
   "content-type": "application/json",
@@ -40,6 +51,19 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [rejected, setRejected] = useState<Set<number>>(new Set());
   const [rationale, setRationale] = useState("");
+  const [view, setView] = useState<ReturnType<typeof serializeBoard> | null>(null);
+
+  // Hovering a finding outlines the shapes it refers to, using the same
+  // translucent preview layer as proposed edits.
+  const highlight = (refs: string[]) => {
+    if (!game || !view) return;
+    const boxes = refs
+      .map((r) => view.byAlias.get(r))
+      .filter((s): s is Shape => Boolean(s))
+      .map((s) => outlineOf(s))
+      .filter((b): b is Shape => Boolean(b));
+    game.setPreview(boxes);
+  };
 
   const evaluate = async () => {
     if (!game) return;
@@ -47,8 +71,9 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
     setError("");
     setFindings(null);
     try {
-      const board = serializeBoard(game.existingShapes).text;
-      const res = await fetch("/api/ai/evaluate", { method: "POST", headers: auth(), body: JSON.stringify({ board }) });
+      const boardView = serializeBoard(game.existingShapes);
+      setView(boardView);
+      const res = await fetch("/api/ai/evaluate", { method: "POST", headers: auth(), body: JSON.stringify({ board: boardView.text }) });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message);
       setFindings(body.evaluation.findings);
@@ -66,6 +91,7 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
     setError("");
     try {
       const view = serializeBoard(game.existingShapes);
+      setView(view);
       const res = await fetch("/api/ai/edit", {
         method: "POST",
         headers: auth(),
@@ -126,7 +152,12 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
           {summary && <p className="text-xs text-muted-foreground">{summary}</p>}
 
           {findings?.map((f, i) => (
-            <div key={i} className="rounded-lg border border-border/60 p-2.5">
+            <div
+              key={i}
+              onMouseEnter={() => highlight(f.refs)}
+              onMouseLeave={() => game?.clearPreview()}
+              className="rounded-lg border border-border/60 p-2.5"
+            >
               <p className={`text-xs font-medium ${SEVERITY[f.severity]}`}>
                 {f.severity} · {f.category}
               </p>

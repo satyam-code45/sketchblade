@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { callAI } from "@/lib/ai-call";
-import { DiagramSchema, clamp, PRESETS, AIError, type PresetId } from "@repo/ai";
+import { log } from "@/lib/log";
+import { DiagramSchema, clamp, PRESETS, isAIError, type PresetId } from "@repo/ai";
 
 export async function POST(req: Request) {
   const userId = getUserId(req);
@@ -36,7 +37,8 @@ export async function POST(req: Request) {
       onPlatformKey,
     });
   } catch (err) {
-    const e = err instanceof AIError ? err : null;
+    const e = isAIError(err) ? err : null;
+    log("error", "ai_call_failed", { task: "diagram", userId, kind: e?.kind ?? "unhandled", message: e?.message ?? String(err) });
     const status = e?.kind === "auth" ? 402 : e?.kind === "rate_limit" ? 429 : 502;
     return NextResponse.json({ message: e?.message ?? "Diagram generation failed." }, { status });
   }
