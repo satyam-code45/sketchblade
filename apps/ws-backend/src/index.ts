@@ -3,6 +3,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
 import { prismaClient } from "@repo/db/client";
+import { startBus, publish, markPresent, markAbsent, presentIn, busEnabled } from "./bus";
 
 const PORT = Number(process.env.PORT) || 8080;
 
@@ -34,6 +35,24 @@ interface User {
 
 const users: User[] = [];
 
+// Everything the room should see goes through here: published to the bus so
+// other instances deliver it too, then handed to our own sockets.
+function toRoom(roomId: string, payload: string) {
+  publish(roomId, payload);
+  deliverLocally(roomId, payload);
+}
+
+function deliverLocally(roomId: string, payload: string) {
+  users.forEach((u) => {
+    if (!u.rooms.includes(roomId) || u.ws.readyState !== WebSocket.OPEN) return;
+    // A slow reader must not grow an unbounded send buffer.
+    if (u.ws.bufferedAmount > 1_000_000) return;
+    u.ws.send(payload);
+  });
+}
+
+startBus(deliverLocally);
+
 function checkUser(token: string): string | null {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -44,18 +63,17 @@ function checkUser(token: string): string | null {
   }
 }
 
-function broadcastPresence(roomId: string) {
-  // Reconnects (page reload, a dropped connection retrying) can leave a stale
-  // entry in `users` briefly overlapping with the new one — dedupe by userId
-  // so the same person never shows up twice in the presence list.
+async function broadcastPresence(roomId: string) {
+  // Reconnects can leave a stale entry overlapping the new one, so dedupe by userId.
   const roomUsers = users.filter((u) => u.rooms.includes(roomId) && u.ws.readyState === WebSocket.OPEN);
-  const uniqueByUser = Array.from(new Map(roomUsers.map((u) => [u.userId, u])).values());
-  const payload = JSON.stringify({
-    type: "presence",
-    roomId,
-    users: uniqueByUser.map((u) => ({ userId: u.userId, name: u.name })),
-  });
-  roomUsers.forEach((u) => u.ws.send(payload));
+  const local = Array.from(new Map(roomUsers.map((u) => [u.userId, u])).values())
+    .map((u) => ({ userId: u.userId, name: u.name }));
+
+  const everyone = busEnabled()
+    ? Array.from(new Map((await presentIn(roomId)).map((u) => [u.userId, u])).values())
+    : local;
+
+  toRoom(roomId, JSON.stringify({ type: "presence", roomId, users: everyone }));
 }
 
 wss.on("connection", function connection(ws, request) {
@@ -84,7 +102,8 @@ wss.on("connection", function connection(ws, request) {
         const roomId = String(parsedData.roomId);
         if (!user.rooms.includes(roomId)) user.rooms.push(roomId);
         if (typeof parsedData.name === "string") user.name = parsedData.name;
-        broadcastPresence(roomId);
+        await markPresent(roomId, user.userId, user.name);
+        await broadcastPresence(roomId);
         return;
       }
 
@@ -93,7 +112,8 @@ wss.on("connection", function connection(ws, request) {
         if (!user) return;
         const roomId = String(parsedData.roomId);
         user.rooms = user.rooms.filter((r) => r !== roomId);
-        broadcastPresence(roomId);
+        await markAbsent(roomId, user.userId);
+        await broadcastPresence(roomId);
         return;
       }
 
@@ -108,9 +128,7 @@ wss.on("connection", function connection(ws, request) {
           name: user.name,
           state: parsedData.state,
         });
-        users.forEach((u) => {
-          if (u !== user && u.rooms.includes(roomId) && u.ws.readyState === WebSocket.OPEN) u.ws.send(payload);
-        });
+        toRoom(roomId, payload);
         return;
       }
 
@@ -149,22 +167,21 @@ wss.on("connection", function connection(ws, request) {
         // Snapshots are a storage detail, not a board change — nobody needs them pushed.
         if (message.includes('"snapshot"')) return;
 
-        users.forEach((user) => {
-          if (user.rooms.includes(String(roomId)) && user.ws.readyState === WebSocket.OPEN) {
-            user.ws.send(JSON.stringify({ type: "board", message, roomId }));
-          }
-        });
+        toRoom(String(roomId), JSON.stringify({ type: "board", message, roomId }));
       }
     } catch (err) {
       console.error("[ws] message handler error:", err);
     }
   });
 
-  ws.on("close", () => {
+  ws.on("close", async () => {
     const user = users.find((u) => u.ws === ws);
     if (!user) return;
     const rooms = [...user.rooms];
     users.splice(users.indexOf(user), 1);
-    rooms.forEach((roomId) => broadcastPresence(roomId));
+    for (const roomId of rooms) {
+      await markAbsent(roomId, user.userId);
+      await broadcastPresence(roomId);
+    }
   });
 });
