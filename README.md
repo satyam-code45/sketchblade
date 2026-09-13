@@ -67,6 +67,27 @@ sketchblade/
                   └──────────────────┘
 ```
 
+## Measured limits
+
+Run against one `ws-backend` instance on a laptop, Neon as the database, Redis fan-out on:
+
+```
+60 sockets across 5 rooms, 15s
+sent 295 | delivered 3540 | failed sockets 0
+broadcast latency  p50 299ms  p95 1085ms  p99 1369ms
+throughput 19.7 msg/s in, 236 msg/s out
+```
+
+The bottleneck is **not** fan-out — it is the synchronous database write. Every board
+event is persisted before it is broadcast, so latency tracks the Neon round trip rather
+than the number of subscribers. That is a deliberate trade: a client never renders a
+shape the database did not take. Moving persistence off the hot path would cut p95
+sharply at the cost of that guarantee.
+
+Reproduce with `node apps/ws-backend/loadtest.mjs <tokenFile> <roomIds> [sockets] [seconds]`.
+Rooms must exist — an event for an unknown room fails to persist and is never broadcast.
+
+
 ## Local Development
 
 ### Prerequisites
