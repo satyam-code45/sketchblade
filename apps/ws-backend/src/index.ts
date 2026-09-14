@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
 import { prismaClient } from "@repo/db/client";
 import { startBus, publish, markPresent, markAbsent, presentIn, busEnabled } from "./bus";
+import { runAI } from "./ai-relay";
 
 const PORT = Number(process.env.PORT) || 8080;
 
@@ -197,6 +198,18 @@ wss.on("connection", function connection(ws, request) {
           text,
           createdAt: row.createdAt,
         }));
+
+        if (/(^|\s)@ai\b/i.test(text)) {
+          // Deliberately fire and forget: the reply streams on its own.
+          void runAI({
+            roomId,
+            userId,
+            name: user.name,
+            question: text.replace(/(^|\s)@ai\b/i, " ").trim(),
+            board: String(parsedData.board ?? "(not provided)"),
+            emit: (payload) => toRoom(String(roomId), payload),
+          });
+        }
         return;
       }
 
