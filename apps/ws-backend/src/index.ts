@@ -175,6 +175,31 @@ wss.on("connection", function connection(ws, request) {
         return;
       }
 
+      if (parsedData.type === "chat_message") {
+        const user = users.find((x) => x.ws === ws);
+        if (!user) return;
+        const roomId = Number(parsedData.roomId);
+        const text = String(parsedData.text ?? "").slice(0, 2000).trim();
+        if (!text) return;
+
+        const row = await prismaClient.chat.create({
+          data: { roomId, userId, message: text, kind: "user" },
+          select: { id: true, createdAt: true },
+        });
+
+        toRoom(String(roomId), JSON.stringify({
+          type: "chat_message",
+          roomId,
+          id: row.id,
+          userId,
+          name: user.name,
+          kind: "user",
+          text,
+          createdAt: row.createdAt,
+        }));
+        return;
+      }
+
       if (parsedData.type === "board") {
         metrics.messages++;
         const roomId = parsedData.roomId as number;
