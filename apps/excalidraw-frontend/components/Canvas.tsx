@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { Game, Tool, Shape, SelectionInfo } from "@/draw";
 import AIPanel from "@/components/ai/AIPanel";
+import ChatPanel from "@/components/chat/ChatPanel";
 import { uploadToCloudinary, cloudinaryVideoPoster } from "@/lib/cloudinary";
 import ThemeToggle from "./ThemeToggle";
 import React from "react";
@@ -923,6 +924,8 @@ export default function Canvas({
           {aiBusyBy} is generating…
         </div>
       )}
+
+      <ChatPanel game={gameRef.current} roomId={roomId} />
 
       {/* ── AI diagram generation ── */}
       <button

@@ -150,6 +150,7 @@ export class Game {
   private onVideoOpen?: (shape: VideoShape) => void;
   private onSelectionChange?: (info: SelectionInfo) => void;
   onAIActivity?: (who: string | null) => void;
+  onChat?: (msg: Record<string, unknown>) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -236,6 +237,10 @@ export class Game {
 
   // Bulk insert as one unit: one history entry, one frame. An AI-generated
   // diagram should be one Ctrl+Z, not thirty.
+  sendChat(text: string, board: string) {
+    this.socket.send(JSON.stringify({ type: "chat_message", roomId: Number(this.roomId), text, board }));
+  }
+
   broadcastAIActivity(state: "generating" | "idle") {
     this.socket.send(JSON.stringify({ type: "ai_activity", roomId: Number(this.roomId), state }));
   }
@@ -1052,6 +1057,10 @@ export class Game {
       // timing out) and deliberately didn't broadcast it. It's already rendered
       // locally, so surface this loudly rather than let it silently vanish on reload.
       console.error(`[draw] a change to room ${msg.roomId} failed to save — it will not persist or sync to other clients.`);
+      return;
+    }
+    if (msg.type?.startsWith("chat_") || msg.type?.startsWith("ai_stream")) {
+      this.onChat?.(msg);
       return;
     }
     if (msg.type === "ai_activity") {
