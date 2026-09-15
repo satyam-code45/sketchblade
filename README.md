@@ -87,6 +87,22 @@ sharply at the cost of that guarantee.
 Reproduce with `node apps/ws-backend/loadtest.mjs <tokenFile> <roomIds> [sockets] [seconds]`.
 Rooms must exist — an event for an unknown room fails to persist and is never broadcast.
 
+## Prompt injection in a shared room
+
+A shared assistant has an attack surface a private one does not: anyone in the room can
+write a message that lands in everyone else's context. The mitigation is architectural
+rather than a better prompt — **the chat assistant cannot write to the board at all.** It
+can only answer; changing anything goes through the Review tab, where the person who asked
+approves each change.
+
+`node --env-file=.env apps/ws-backend/injection-check.mjs <tokenFile>` plants a hostile
+instruction as one user, asks a question as another, and asserts the board is untouched:
+
+```
+board events before: 279 after: 279 -> UNCHANGED
+any board frame broadcast during the attack: false
+```
+
 
 ## Local Development
 
