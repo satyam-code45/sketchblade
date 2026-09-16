@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
 import { prismaClient } from "@repo/db/client";
 import { startBus, publish, markPresent, markAbsent, presentIn, busEnabled } from "./bus";
+import { runAI } from "./ai-relay";
 
 const PORT = Number(process.env.PORT) || 8080;
 
@@ -172,6 +173,43 @@ wss.on("connection", function connection(ws, request) {
           state: parsedData.state,
         });
         toRoom(roomId, payload);
+        return;
+      }
+
+      if (parsedData.type === "chat_message") {
+        const user = users.find((x) => x.ws === ws);
+        if (!user) return;
+        const roomId = Number(parsedData.roomId);
+        const text = String(parsedData.text ?? "").slice(0, 2000).trim();
+        if (!text) return;
+
+        const row = await prismaClient.chat.create({
+          data: { roomId, userId, message: text, kind: "user" },
+          select: { id: true, createdAt: true },
+        });
+
+        toRoom(String(roomId), JSON.stringify({
+          type: "chat_message",
+          roomId,
+          id: row.id,
+          userId,
+          name: user.name,
+          kind: "user",
+          text,
+          createdAt: row.createdAt,
+        }));
+
+        if (/(^|\s)@ai\b/i.test(text)) {
+          // Deliberately fire and forget: the reply streams on its own.
+          void runAI({
+            roomId,
+            userId,
+            name: user.name,
+            question: text.replace(/(^|\s)@ai\b/i, " ").trim(),
+            board: String(parsedData.board ?? "(not provided)"),
+            emit: (payload) => toRoom(String(roomId), payload),
+          });
+        }
         return;
       }
 

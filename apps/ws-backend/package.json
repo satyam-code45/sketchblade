@@ -6,14 +6,16 @@
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js --external:ws --external:@prisma/client --external:jsonwebtoken",
     "start": "node ./dist/index.js",
-    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts"
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@repo/db": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "jsonwebtoken": "^9.0.2",
     "ws": "^8.18.3",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "@repo/ai": "workspace:*"
   },
   "devDependencies": {
     "@repo/backend-common": "workspace:*",

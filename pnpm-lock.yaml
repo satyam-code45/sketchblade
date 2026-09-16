@@ -111,6 +111,9 @@ importers:
 
   apps/ws-backend:
     dependencies:
+      '@repo/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@repo/db':
         specifier: workspace:*
         version: link:../../packages/db
