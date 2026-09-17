@@ -282,6 +282,46 @@ export class Game {
     if (removed.length) this.sendErase(removed.map((s) => s.id!));
   }
 
+  // Rendered offscreen at 2x, independent of current pan and zoom, so the export
+  // is the board rather than whatever happens to be on screen.
+  async exportPNG(opts: { selectionOnly?: boolean; transparent?: boolean; scale?: number } = {}) {
+    const scale = opts.scale ?? 2;
+    const source = opts.selectionOnly
+      ? this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id))
+      : this.existingShapes;
+    if (source.length === 0) return null;
+
+    const b = this.getPaddedBounds(source, 24);
+    const width = Math.max(1, Math.round((b.maxX - b.minX) * scale));
+    const height = Math.max(1, Math.round((b.maxY - b.minY) * scale));
+    // Canvases have a hard size ceiling; fall back to 1x rather than failing.
+    const safe = width > 16000 || height > 16000 ? 1 : scale;
+
+    const off = document.createElement("canvas");
+    off.width = Math.round((b.maxX - b.minX) * safe);
+    off.height = Math.round((b.maxY - b.minY) * safe);
+    const ctx = off.getContext("2d")!;
+
+    if (!opts.transparent) {
+      ctx.fillStyle = this.bgColor;
+      ctx.fillRect(0, 0, off.width, off.height);
+    }
+
+    // drawShape draws to this.ctx, so point it at the offscreen canvas and put it back.
+    const realCtx = this.ctx;
+    this.ctx = ctx;
+    ctx.setTransform(safe, 0, 0, safe, -b.minX * safe, -b.minY * safe);
+    ctx.strokeStyle = this.strokeColor;
+    ctx.fillStyle = this.strokeColor;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    source.forEach((shape) => this.drawShape(shape));
+    this.ctx = realCtx;
+
+    return new Promise<Blob | null>((resolve) => off.toBlob(resolve, "image/png"));
+  }
+
   duplicateSelected() {
     const picked = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
     if (picked.length === 0) return;
