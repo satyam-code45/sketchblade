@@ -1,6 +1,6 @@
 import type { Shape } from ".";
 
-type BoardPayload = { shape?: Shape; shapes?: Shape[]; erase?: string[] };
+type BoardPayload = { shape?: Shape; shapes?: Shape[]; erase?: string[]; reorder?: string[] };
 
 // Rebuilds a board from its event log. Pure so compaction can be proved
 // equivalent to a full replay.
@@ -12,6 +12,12 @@ export function replayEvents(events: string[], seed: Shape[] = []): Shape[] {
     try {
       data = JSON.parse(payload);
     } catch {
+      continue;
+    }
+
+    if (data.reorder) {
+      const order = new Map(data.reorder.map((id, i) => [id, i]));
+      shapes.sort((a, b) => (order.get(a.id ?? "") ?? 0) - (order.get(b.id ?? "") ?? 0));
       continue;
     }
 

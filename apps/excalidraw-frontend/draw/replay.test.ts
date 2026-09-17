@@ -46,3 +46,25 @@ test("snapshot plus tail equals a full replay", () => {
     assert.deepEqual(compacted, full, `cut at ${cut}`);
   }
 });
+
+test("a reorder event survives replay", () => {
+  const log = [
+    JSON.stringify({ shape: { type: "rect", id: "a", x: 0, y: 0, width: 1, height: 1 } }),
+    JSON.stringify({ shape: { type: "rect", id: "b", x: 0, y: 0, width: 1, height: 1 } }),
+    JSON.stringify({ shape: { type: "rect", id: "c", x: 0, y: 0, width: 1, height: 1 } }),
+    JSON.stringify({ reorder: ["c", "a", "b"] }),
+  ];
+  assert.deepEqual(replayEvents(log).map((s) => s.id), ["c", "a", "b"]);
+});
+
+test("reorder then edit keeps the new order", () => {
+  const log = [
+    JSON.stringify({ shape: { type: "rect", id: "a", x: 0, y: 0, width: 1, height: 1 } }),
+    JSON.stringify({ shape: { type: "rect", id: "b", x: 0, y: 0, width: 1, height: 1 } }),
+    JSON.stringify({ reorder: ["b", "a"] }),
+    JSON.stringify({ shape: { type: "rect", id: "a", x: 99, y: 0, width: 1, height: 1 } }),
+  ];
+  const out = replayEvents(log);
+  assert.deepEqual(out.map((s) => s.id), ["b", "a"]);
+  assert.equal((out[1] as { x: number }).x, 99);
+});
