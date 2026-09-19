@@ -10,6 +10,7 @@ import {
   Circle,
   Copy,
   Diamond,
+  Download,
   Eraser,
   Hand,
   Highlighter,
@@ -17,14 +18,15 @@ import {
   Loader2,
   Lock,
   Maximize2,
-  MinusCircle,
   Minus,
+  MinusCircle,
   MousePointer2,
   Palette,
   Pencil,
   PlusCircle,
   RotateCcw,
   RotateCw,
+  Sparkles,
   Square,
   Type,
   Unlock,
@@ -32,11 +34,12 @@ import {
   X,
   ZoomIn,
   ZoomOut,
-  Sparkles,
 } from "lucide-react";
 import { Game, Tool, Shape, SelectionInfo } from "@/draw";
 import AIPanel from "@/components/ai/AIPanel";
 import ChatPanel from "@/components/chat/ChatPanel";
+import FloatingToolbar from "@/components/FloatingToolbar";
+import StickerPicker from "@/components/StickerPicker";
 import { uploadToCloudinary, cloudinaryVideoPoster } from "@/lib/cloudinary";
 import ThemeToggle from "./ThemeToggle";
 import React from "react";
@@ -925,9 +928,28 @@ export default function Canvas({
         </div>
       )}
 
+      <FloatingToolbar game={gameRef.current} selection={selection} />
+      <StickerPicker game={gameRef.current} />
       <ChatPanel game={gameRef.current} roomId={roomId} />
 
       {/* ── AI diagram generation ── */}
+      <button
+        onClick={async () => {
+          const blob = await gameRef.current?.exportPNG({ selectionOnly: selection.count > 0 });
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `sketchblade-${roomId}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }}
+        title={selection.count > 0 ? "Export selection as PNG" : "Export board as PNG"}
+        className="absolute bottom-4 right-52 z-30 flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent"
+      >
+        <Download className="size-4" /> Export
+      </button>
+
       <button
         onClick={() => setAiOpen((v) => !v)}
         title="Generate with AI"

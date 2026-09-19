@@ -65,6 +65,13 @@ const STROKE_WIDTH_TYPES = new Set<Shape["type"]>(["rect", "ellipse", "diamond",
 
 const SNAPSHOT_EVERY = 500;
 
+function shiftShape(s: Shape, dx: number, dy: number) {
+  if ("x" in s) { s.x += dx; s.y += dy; }
+  if ("centerX" in s) { s.centerX += dx; s.centerY += dy; }
+  if ("startX" in s) { s.startX += dx; s.startY += dy; s.endX += dx; s.endY += dy; }
+  if ("points" in s) s.points = s.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+}
+
 const genId = () => Math.random().toString(36).slice(2, 10);
 
 export class Game {
@@ -273,6 +280,89 @@ export class Game {
     const changed = [...opts.add, ...this.existingShapes.filter((s) => before.some((b) => b.id === s.id))];
     if (changed.length) this.broadcastShapes(changed);
     if (removed.length) this.sendErase(removed.map((s) => s.id!));
+  }
+
+  // Rendered offscreen at 2x, independent of current pan and zoom, so the export
+  // is the board rather than whatever happens to be on screen.
+  async exportPNG(opts: { selectionOnly?: boolean; transparent?: boolean; scale?: number } = {}) {
+    const scale = opts.scale ?? 2;
+    const source = opts.selectionOnly
+      ? this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id))
+      : this.existingShapes;
+    if (source.length === 0) return null;
+
+    const b = this.getPaddedBounds(source, 24);
+    const width = Math.max(1, Math.round((b.maxX - b.minX) * scale));
+    const height = Math.max(1, Math.round((b.maxY - b.minY) * scale));
+    // Canvases have a hard size ceiling; fall back to 1x rather than failing.
+    const safe = width > 16000 || height > 16000 ? 1 : scale;
+
+    const off = document.createElement("canvas");
+    off.width = Math.round((b.maxX - b.minX) * safe);
+    off.height = Math.round((b.maxY - b.minY) * safe);
+    const ctx = off.getContext("2d")!;
+
+    if (!opts.transparent) {
+      ctx.fillStyle = this.bgColor;
+      ctx.fillRect(0, 0, off.width, off.height);
+    }
+
+    // drawShape draws to this.ctx, so point it at the offscreen canvas and put it back.
+    const realCtx = this.ctx;
+    this.ctx = ctx;
+    ctx.setTransform(safe, 0, 0, safe, -b.minX * safe, -b.minY * safe);
+    ctx.strokeStyle = this.strokeColor;
+    ctx.fillStyle = this.strokeColor;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    source.forEach((shape) => this.drawShape(shape));
+    this.ctx = realCtx;
+
+    return new Promise<Blob | null>((resolve) => off.toBlob(resolve, "image/png"));
+  }
+
+  duplicateSelected() {
+    const picked = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
+    if (picked.length === 0) return;
+    // Fresh ids, or replay treats the clones as edits to the originals.
+    const clones = picked.map((s) => {
+      const copy = structuredClone(s) as Shape & { id: string };
+      copy.id = genId();
+      copy.version = 0;
+      shiftShape(copy, 20, 20);
+      return copy as Shape;
+    });
+    this.addShapes(clones);
+  }
+
+  // Array order is paint order, so reordering is a move plus an explicit event —
+  // replay is by id, and would otherwise reset the order on reload.
+  reorderSelected(where: "front" | "back" | "forward" | "backward") {
+    const picked = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
+    if (picked.length === 0) return;
+    const rest = this.existingShapes.filter((s) => !(s.id && this.selectedIds.has(s.id)));
+
+    if (where === "front") this.existingShapes = [...rest, ...picked];
+    else if (where === "back") this.existingShapes = [...picked, ...rest];
+    else {
+      const step = where === "forward" ? 1 : -1;
+      const next = [...this.existingShapes];
+      const indices = picked.map((s) => next.indexOf(s));
+      (step > 0 ? indices.reverse() : indices).forEach((i) => {
+        const j = i + step;
+        if (j < 0 || j >= next.length) return;
+        [next[i], next[j]] = [next[j]!, next[i]!];
+      });
+      this.existingShapes = next;
+    }
+
+    this.clearCanvas();
+    this.socket.send(JSON.stringify({
+      type: "board",
+      roomId: Number(this.roomId),
+      message: JSON.stringify({ reorder: this.existingShapes.map((s) => s.id).filter(Boolean) }),
+    }));
   }
 
   setPreview(shapes: Shape[]) {
@@ -1069,8 +1159,15 @@ export class Game {
     }
     if (msg.type !== "board") return;
 
-    let data: { shape?: Shape; shapes?: Shape[]; erase?: string[] };
+    let data: { shape?: Shape; shapes?: Shape[]; erase?: string[]; reorder?: string[] };
     try { data = JSON.parse(msg.message); } catch { return; }
+
+    if (data.reorder) {
+      const order = new Map(data.reorder.map((id, i) => [id, i]));
+      this.existingShapes.sort((a, b) => (order.get(a.id!) ?? 0) - (order.get(b.id!) ?? 0));
+      this.clearCanvas();
+      return;
+    }
 
     if (data.shape || data.shapes) {
       const incoming = data.shapes ?? [data.shape!];
