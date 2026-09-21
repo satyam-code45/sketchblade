@@ -9,9 +9,19 @@ services:
     startCommand: node apps/ws-backend/dist/index.js
     healthCheckPath: /health
     envVars:
+      # Append &connection_limit=5 to the Neon URL — the default pool of 21 is
+      # shared with the frontend and runs out under load.
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
+        sync: false
+      # Needed for @ai in room chat, and to decrypt a user's own key.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_KEY_ENCRYPTION_KEY
+        sync: false
+      # Optional: unset means single instance, which is correct on one dyno.
+      - key: REDIS_URL
         sync: false
       - key: NODE_ENV
         value: production
