@@ -268,6 +268,10 @@ export default function Canvas({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (textInput) return;
+      // Single-letter shortcuts must not fire while typing in a panel: "r" was
+      // switching to the rectangle tool mid-prompt.
+      const el = e.target as HTMLElement | null;
+      if (el?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el?.tagName ?? "")) return;
       const game = gameRef.current;
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
@@ -929,36 +933,41 @@ export default function Canvas({
       )}
 
       <FloatingToolbar game={gameRef.current} selection={selection} />
-      <StickerPicker game={gameRef.current} />
-      <ChatPanel game={gameRef.current} roomId={roomId} />
+
+      <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
+        <button
+          onClick={async () => {
+            const blob = await gameRef.current?.exportPNG({ selectionOnly: selection.count > 0 });
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `sketchblade-${roomId}.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          title={selection.count > 0 ? "Export selection as PNG" : "Export board as PNG"}
+          className="flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent"
+        >
+          <Download className="size-4" /> Export
+        </button>
+
+        <StickerPicker game={gameRef.current} />
+        <ChatPanel game={gameRef.current} roomId={roomId} />
+
+        <button
+          onClick={() => setAiOpen((v) => !v)}
+          title="Generate with AI"
+          className={`flex h-10 items-center gap-2 rounded-xl border border-border/60 px-3 text-sm font-medium shadow-lg backdrop-blur-md transition-colors ${
+            aiOpen ? "bg-primary text-primary-foreground" : "bg-background/90 hover:bg-accent"
+          }`}
+        >
+          <Sparkles className="size-4" /> AI
+        </button>
+      </div>
 
       {/* ── AI diagram generation ── */}
-      <button
-        onClick={async () => {
-          const blob = await gameRef.current?.exportPNG({ selectionOnly: selection.count > 0 });
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `sketchblade-${roomId}.png`;
-          a.click();
-          URL.revokeObjectURL(url);
-        }}
-        title={selection.count > 0 ? "Export selection as PNG" : "Export board as PNG"}
-        className="absolute bottom-4 right-52 z-30 flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent"
-      >
-        <Download className="size-4" /> Export
-      </button>
 
-      <button
-        onClick={() => setAiOpen((v) => !v)}
-        title="Generate with AI"
-        className={`absolute bottom-4 right-4 z-30 flex h-10 items-center gap-2 rounded-xl border border-border/60 px-3 text-sm font-medium shadow-lg backdrop-blur-md transition-colors ${
-          aiOpen ? "bg-primary text-primary-foreground" : "bg-background/90 hover:bg-accent"
-        }`}
-      >
-        <Sparkles className="size-4" /> AI
-      </button>
       {aiOpen && <AIPanel game={gameRef.current} onClose={() => setAiOpen(false)} />}
 
       {/* ── Video playback modal ── */}
