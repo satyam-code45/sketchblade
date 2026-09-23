@@ -75,24 +75,17 @@ export default function ChatPanel({ game, roomId }: { game: Game | null; roomId:
     setDraft("");
   };
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        title="Room chat"
-        className="absolute bottom-4 right-20 z-30 flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent"
-      >
+  return (
+    <>
+      <button onClick={() => setOpen((v) => !v)} title="Room chat" className="flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent">
         <MessageSquare className="size-4" />
         Chat
         {unread > 0 && (
           <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{unread}</span>
         )}
       </button>
-    );
-  }
-
-  return (
-    <div className="absolute bottom-4 right-4 z-40 flex h-[420px] w-[320px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border/60 bg-background/95 shadow-xl backdrop-blur-md">
+      {open && (
+    <div className="fixed bottom-20 right-4 z-40 flex h-[420px] w-[320px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border/60 bg-background/95 shadow-xl backdrop-blur-md">
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
         <span className="flex items-center gap-2 text-sm font-medium">
           <MessageSquare className="size-4" /> Room chat
@@ -134,5 +127,7 @@ export default function ChatPanel({ game, roomId }: { game: Game | null; roomId:
       </div>
       <p className="px-3 pb-2 text-[10px] text-muted-foreground">@ai runs on your key and can read the board, not change it.</p>
     </div>
+      )}
+    </>
   );
 }

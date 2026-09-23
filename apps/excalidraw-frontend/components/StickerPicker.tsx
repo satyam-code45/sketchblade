@@ -49,20 +49,13 @@ export default function StickerPicker({ game }: { game: Game | null }) {
     setOpen(false);
   };
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        title="Notes and emoji"
-        className="absolute bottom-4 right-36 z-30 flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent"
-      >
+  return (
+    <>
+      <button onClick={() => setOpen((v) => !v)} title="Notes and emoji" className="flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent">
         <StickyNote className="size-4" /> Notes
       </button>
-    );
-  }
-
-  return (
-    <div className="absolute bottom-20 right-4 z-40 w-[300px] rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
+      {open && (
+    <div className="fixed bottom-20 right-4 z-40 w-[300px] rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">Notes and emoji</span>
         <button onClick={() => setOpen(false)} title="Close" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
@@ -101,5 +94,7 @@ export default function StickerPicker({ game }: { game: Game | null }) {
         ))}
       </div>
     </div>
+      )}
+    </>
   );
 }
