@@ -123,7 +123,7 @@ export default function SignUpForm() {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button
-          className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+          className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
           onClick={handleSubmit}
           disabled={loading}
         >
@@ -134,7 +134,7 @@ export default function SignUpForm() {
           Already have an account?{" "}
           <Link
             href="/sign-in"
-            className="font-medium text-violet-600 hover:underline dark:text-violet-400"
+            className="font-medium text-primary hover:underline"
           >
             Sign In
           </Link>

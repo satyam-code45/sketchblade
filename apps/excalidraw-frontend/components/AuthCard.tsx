@@ -2,7 +2,7 @@ import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 
 const LogoIcon = () => (
-  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white">
+  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path
         d="M2 14L5.5 10.5L10.5 5.5L12.5 7.5L7.5 12.5L2 14Z"
@@ -35,7 +35,7 @@ export default function AuthCard({
     <div className="relative min-h-screen bg-background">
       {/* Ambient glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-0 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-violet-500/10 blur-3xl" />
+        <div className="absolute left-1/2 top-0 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
       </div>
 
       {/* Header */}

@@ -473,7 +473,7 @@ export default function Canvas({
                 title={c}
                 className={[
                   "size-5 rounded-full border shadow-sm transition-transform hover:scale-110",
-                  color === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                  color === c ? "border-primary ring-2 ring-ring/50" : "border-border/60",
                 ].join(" ")}
                 style={{ backgroundColor: c }}
               />
@@ -493,7 +493,7 @@ export default function Canvas({
             onClick={() => setColor(null)}
             className={[
               "mt-1.5 w-full rounded-md px-2 py-1 text-[11px] transition-colors",
-              color === null ? "bg-violet-600/10 text-violet-500" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              color === null ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground",
             ].join(" ")}
           >
             Auto (theme)
@@ -510,7 +510,7 @@ export default function Canvas({
                   title="Transparent"
                   className={[
                     "flex size-5 items-center justify-center rounded-full border shadow-sm transition-transform hover:scale-110",
-                    fillColor === null ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                    fillColor === null ? "border-primary ring-2 ring-ring/50" : "border-border/60",
                   ].join(" ")}
                 >
                   <Ban className="size-3 text-muted-foreground" />
@@ -522,7 +522,7 @@ export default function Canvas({
                     title={c}
                     className={[
                       "size-5 rounded-full border shadow-sm transition-transform hover:scale-110",
-                      fillColor === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                      fillColor === c ? "border-primary ring-2 ring-ring/50" : "border-border/60",
                     ].join(" ")}
                     style={{ backgroundColor: c }}
                   />
@@ -558,7 +558,7 @@ export default function Canvas({
                     className={[
                       "flex h-8 flex-1 items-center justify-center rounded-lg border transition-colors",
                       strokeWidth === opt.value
-                        ? "border-violet-500 bg-violet-600/10"
+                        ? "border-primary bg-primary/10"
                         : "border-border/60 hover:bg-accent",
                     ].join(" ")}
                   >
@@ -613,7 +613,7 @@ export default function Canvas({
                   className={[
                     "group relative flex h-8 w-8 items-center justify-center rounded-lg transition-all",
                     selectedTool === tool.id
-                      ? "bg-violet-600 text-white shadow-sm"
+                      ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   ].join(" ")}
                 >
@@ -658,7 +658,7 @@ export default function Canvas({
                       title={c}
                       className={[
                         "size-6 rounded-full border shadow-sm transition-transform hover:scale-110",
-                        canvasColor === c ? "border-violet-500 ring-2 ring-violet-500/50" : "border-border/60",
+                        canvasColor === c ? "border-primary ring-2 ring-ring/50" : "border-border/60",
                       ].join(" ")}
                       style={{ backgroundColor: c }}
                     />
@@ -679,7 +679,7 @@ export default function Canvas({
                   className={[
                     "mt-2 w-full rounded-md px-2 py-1 text-[11px] transition-colors",
                     canvasColor === null
-                      ? "bg-violet-600/10 text-violet-500"
+                      ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   ].join(" ")}
                 >
@@ -881,7 +881,7 @@ export default function Canvas({
             className={[
               "flex h-6 w-6 items-center justify-center rounded-md transition-colors",
               selection.allLocked
-                ? "bg-violet-600/10 text-violet-500"
+                ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             ].join(" ")}
           >
@@ -898,7 +898,7 @@ export default function Canvas({
             left: textInput.sx, top: textInput.sy - 12, position: "absolute",
             fontSize: `${fontSize}px`, color: color ?? undefined,
           }}
-          className="z-30 min-h-[36px] min-w-[140px] resize-none rounded-lg border-2 border-violet-500 bg-background px-3 py-2 text-foreground outline-none shadow-xl"
+          className="z-30 min-h-[36px] min-w-[140px] resize-none rounded-lg border-2 border-primary bg-background px-3 py-2 text-foreground outline-none shadow-xl"
           rows={1}
           placeholder="Type here…"
           value={textValue}
@@ -913,7 +913,7 @@ export default function Canvas({
 
       {/* ── Upload error toast ── */}
       {uploadError && (
-        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-500 shadow-lg backdrop-blur-md">
+        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-lg backdrop-blur-md">
           {uploadError}
           <button onClick={() => setUploadError("")} className="ml-2 underline underline-offset-2">
             Dismiss

@@ -60,7 +60,7 @@ export default function ForgotPasswordForm() {
             </p>
             <Link
               href="/sign-in"
-              className="inline-block text-sm font-medium text-violet-600 hover:underline dark:text-violet-400"
+              className="inline-block text-sm font-medium text-primary hover:underline"
             >
               Back to Sign In
             </Link>
@@ -95,7 +95,7 @@ export default function ForgotPasswordForm() {
             </p>
 
             <Button
-              className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+              className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
               onClick={() => router.push(`/reset-password?token=${resetToken}`)}
             >
               Reset Password Now
@@ -104,7 +104,7 @@ export default function ForgotPasswordForm() {
             <p className="text-center text-sm text-muted-foreground">
               <Link
                 href="/sign-in"
-                className="font-medium text-violet-600 hover:underline dark:text-violet-400"
+                className="font-medium text-primary hover:underline"
               >
                 Back to Sign In
               </Link>
@@ -135,7 +135,7 @@ export default function ForgotPasswordForm() {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button
-          className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+          className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
           onClick={handleSubmit}
           disabled={loading}
         >
@@ -146,7 +146,7 @@ export default function ForgotPasswordForm() {
           Remembered it?{" "}
           <Link
             href="/sign-in"
-            className="font-medium text-violet-600 hover:underline dark:text-violet-400"
+            className="font-medium text-primary hover:underline"
           >
             Back to Sign In
           </Link>
