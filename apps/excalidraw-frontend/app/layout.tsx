@@ -5,11 +5,25 @@ import "./globals.css";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+const description =
+  "Draw together in real-time. Create rooms, invite your team, and sketch simultaneously on a shared canvas.";
+
 export const metadata: Metadata = {
   title: "SketchBlade — Real-time Collaborative Drawing",
-  description:
-    "Draw together in real-time. Create rooms, invite your team, and sketch simultaneously on a shared canvas.",
+  description,
+  openGraph: {
+    title: "SketchBlade — Real-time Collaborative Drawing",
+    description,
+    type: "website",
+    siteName: "SketchBlade",
+  },
+  twitter: { card: "summary_large_image", title: "SketchBlade", description },
 };
+
+export const viewport = { themeColor: [
+  { media: "(prefers-color-scheme: light)", color: "#fefefe" },
+  { media: "(prefers-color-scheme: dark)", color: "#1a1620" },
+] };
 
 export default function RootLayout({
   children,
@@ -24,6 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <a href="#main" className="skip-link">Skip to content</a>
         {children}
       </body>
     </html>

@@ -65,7 +65,7 @@ export default function Page() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
 
-      <main>
+      <main id="main">
         {/* ── Hero ── */}
         <section className="relative overflow-hidden pt-20 pb-24 px-4 sm:px-6 lg:px-8">
           {/* Ambient glow */}

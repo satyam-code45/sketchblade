@@ -49,7 +49,7 @@ export default function AuthCard({
       </header>
 
       {/* Centered form */}
-      <main className="relative flex min-h-[calc(100vh-88px)] items-center justify-center px-4 pb-16">
+      <main id="main" className="relative flex min-h-[calc(100vh-88px)] items-center justify-center px-4 pb-16">
         <div className="w-full max-w-sm">
           <div className="mb-7 text-center">
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em]">{title}</h1>
