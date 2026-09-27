@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUp, Loader2, Clock, Crosshair } from "lucide-react";
+import { ArrowUp, Crosshair, RotateCcw, Waypoints } from "lucide-react";
 import type { Game, Shape } from "@/draw";
 import { compileDiagram } from "@/draw/ai/diagram-to-shapes";
 
 const PRESETS = [
-  { id: "diagram", label: "Diagram" },
-  { id: "flowchart", label: "Flowchart" },
-  { id: "architecture", label: "Architecture" },
-  { id: "web", label: "Web mockup" },
-  { id: "mobile", label: "Mobile mockup" },
+  { id: "diagram", label: "Diagram", hint: "Ideas and relationships" },
+  { id: "flowchart", label: "Flowchart", hint: "Steps, branches, decisions" },
+  { id: "architecture", label: "Architecture", hint: "Services, data, infra" },
+  { id: "web", label: "Web mockup", hint: "Page sections and flow" },
+  { id: "mobile", label: "Mobile mockup", hint: "Screens and navigation" },
 ] as const;
 
 type Entry = {
@@ -36,10 +36,11 @@ function placeholderShapes(c: { x: number; y: number }): Shape[] {
   const x = c.x - 210;
   const y = c.y - 110;
   return [
-    { type: "rect", x, y, width: 420, height: 220, color: "#8b5cf6", fillColor: "#f5f3ff", strokeWidth: 2 },
-    { type: "text", x: x + 24, y: y + 48, text: "Generating...", fontSize: 22, color: "#6d28d9" },
-    { type: "rect", x: x + 24, y: y + 90, width: 330, height: 16, color: "#8b5cf6", fillColor: "#ddd6fe", strokeWidth: 1 },
-    { type: "rect", x: x + 24, y: y + 126, width: 250, height: 16, color: "#8b5cf6", fillColor: "#ddd6fe", strokeWidth: 1 },
+    { type: "rect", x, y, width: 420, height: 200, color: "#8b5cf6", strokeWidth: 2 },
+    { type: "text", x: x + 22, y: y + 44, text: "Generating\u2026", fontSize: 18, color: "#a78bfa" },
+    { type: "rect", x: x + 22, y: y + 78, width: 300, height: 12, color: "#8b5cf6", strokeWidth: 1 },
+    { type: "rect", x: x + 22, y: y + 110, width: 220, height: 12, color: "#8b5cf6", strokeWidth: 1 },
+    { type: "rect", x: x + 22, y: y + 142, width: 260, height: 12, color: "#8b5cf6", strokeWidth: 1 },
   ];
 }
 
@@ -114,75 +115,123 @@ export default function GenerateTab({ game, roomId }: { game: Game | null; roomI
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Style</p>
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          {PRESETS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPreset(p.id)}
-              className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                preset === p.id ? "border-primary/60 bg-primary/10 font-medium" : "border-border/60 hover:bg-accent"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <fieldset className="mb-4">
+          <legend className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Style
+          </legend>
+          <div className="grid gap-1">
+            {PRESETS.map((p) => {
+              const active = preset === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setPreset(p.id)}
+                  aria-pressed={active}
+                  className={`group flex items-center justify-between rounded-lg px-2.5 py-2 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                    active ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-accent/60"
+                  }`}
+                >
+                  <span>
+                    <span className={`block text-[13px] font-medium ${active ? "text-primary" : ""}`}>{p.label}</span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">{p.hint}</span>
+                  </span>
+                  {active && <span className="size-1.5 rounded-full bg-primary" />}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void generate(); }}
-          placeholder="Describe what to draw..."
-          rows={4}
-          className="w-full resize-none rounded-lg border border-border/60 bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-        />
+        <div className="rounded-xl border border-border/60 bg-card/40 p-1 transition-colors focus-within:border-primary/40">
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void generate(); }}
+            placeholder="A checkout flow with payment retries and a fraud check\u2026"
+            rows={4}
+            aria-label="Describe the diagram"
+            className="w-full resize-none bg-transparent px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/60"
+          />
+          <div className="flex items-center justify-between px-2 pb-1.5">
+            <span className="text-[10px] text-muted-foreground">&#8984;&#8629; to send</span>
+            <span className="nums text-[10px] text-muted-foreground">{prompt.trim().length}</span>
+          </div>
+        </div>
 
         <button
           onClick={generate}
           disabled={busy || prompt.trim().length < 3}
-          className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-2.5 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary text-[13px] font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100"
         >
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
-          {busy ? "Generating..." : "Generate"}
+          {busy ? "Generating\u2026" : <><ArrowUp className="size-4" strokeWidth={2.25} /> Generate</>}
         </button>
 
-        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-        {!error && <p className="mt-2 text-[10px] text-muted-foreground">Everyone in the room sees it appear. Cmd+Enter to generate.</p>}
+        {error && (
+          <p role="alert" className="mt-2.5 rounded-lg bg-destructive/10 px-2.5 py-2 text-[12px] text-destructive">
+            {error}
+          </p>
+        )}
+
+        {/* Skeleton matching the shape of a history row, not a spinner */}
+        {busy && (
+          <div className="mt-4 space-y-2 rounded-xl border border-border/50 p-3">
+            <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+            <div className="h-2.5 w-full animate-pulse rounded bg-muted/70" />
+            <div className="h-2.5 w-4/5 animate-pulse rounded bg-muted/70" />
+          </div>
+        )}
+
+        {!busy && history.length === 0 && (
+          <div className="mt-6 rounded-xl border border-dashed border-border/60 px-4 py-6 text-center">
+            <Waypoints className="mx-auto size-5 text-muted-foreground/60" strokeWidth={1.75} />
+            <p className="mt-2 text-[12px] font-medium">Nothing generated yet</p>
+            <p className="mx-auto mt-1 max-w-[30ch] text-[11px] leading-relaxed text-muted-foreground">
+              Describe a system and it lands on the canvas for everyone in the room.
+            </p>
+          </div>
+        )}
 
         {history.length > 0 && (
-          <>
-            <div className="mb-2 mt-5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <Clock className="size-3.5" /> This room
-            </div>
-            <ul className="space-y-1.5">
+          <section className="mt-6">
+            <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Earlier in this room
+            </h3>
+            <ul className="space-y-1">
               {history.map((h) => (
-                <li key={h.id} className="rounded-lg border border-border/50 p-2.5">
+                <li
+                  key={h.id}
+                  className="group rounded-lg px-2.5 py-2 transition-colors hover:bg-accent/50"
+                >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-medium leading-snug">{h.title}</p>
-                    <button
-                      onClick={() => game?.centreOn(h.centre)}
-                      title="Scroll to it"
-                      className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent"
-                    >
-                      <Crosshair className="size-3.5" />
-                    </button>
+                    <p className="text-[13px] font-medium leading-snug text-pretty">{h.title}</p>
+                    <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <button
+                        onClick={() => game?.centreOn(h.centre)}
+                        title="Scroll to it"
+                        aria-label={`Scroll to ${h.title}`}
+                        className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      >
+                        <Crosshair className="size-3.5" />
+                      </button>
+                      <button
+                        onClick={() => { setPrompt(h.prompt); setPreset(h.preset); }}
+                        title="Use this prompt again"
+                        aria-label={`Reuse prompt: ${h.prompt}`}
+                        className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      >
+                        <RotateCcw className="size-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{h.prompt}</p>
-                  <p className="mt-1.5 text-[10px] text-muted-foreground">
-                    {h.nodes} nodes · {h.preset} · ${h.costUsd.toFixed(4)} · {ago(h.at)}
+                  <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{h.prompt}</p>
+                  <p className="nums mt-1 text-[10px] text-muted-foreground/80">
+                    {h.nodes} nodes &middot; {h.preset} &middot; ${h.costUsd.toFixed(4)} &middot; {ago(h.at)}
                   </p>
-                  <button
-                    onClick={() => { setPrompt(h.prompt); setPreset(h.preset); }}
-                    className="mt-1.5 text-[11px] text-primary hover:underline"
-                  >
-                    Use again
-                  </button>
                 </li>
               ))}
             </ul>
-          </>
+          </section>
         )}
       </div>
     </div>

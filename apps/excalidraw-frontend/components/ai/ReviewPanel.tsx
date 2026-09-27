@@ -15,10 +15,11 @@ type Finding = {
   refs: string[];
 };
 
-const SEVERITY: Record<string, string> = {
-  critical: "text-destructive",
-  warning: "text-amber-500",
-  suggestion: "text-muted-foreground",
+// A left rule carries severity without shouting; colour stays on the label.
+const SEVERITY: Record<string, { rule: string; dot: string; text: string }> = {
+  critical:   { rule: "border-destructive/50", dot: "bg-destructive",  text: "text-destructive" },
+  warning:    { rule: "border-amber-500/50",   dot: "bg-amber-500",    text: "text-amber-500" },
+  suggestion: { rule: "border-border",         dot: "bg-muted-foreground", text: "text-muted-foreground" },
 };
 
 const STATUS_NOTE: Record<string, string> = {
@@ -137,38 +138,62 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
   const skipped = changes?.filter((c) => c.status !== "applicable").length ?? 0;
 
   return (
-    <div className="space-y-3">
+    <div className="h-full space-y-3 overflow-y-auto px-4 pb-4">
       {!changes && (
         <>
           <button
             onClick={evaluate}
             disabled={busy !== null}
-            className="flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border/60 text-sm font-medium hover:bg-accent disabled:opacity-50"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border/60 bg-card/40 text-[13px] font-medium transition-all duration-200 hover:border-primary/40 hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98] disabled:opacity-40"
           >
             {busy === "evaluate" && <Loader2 className="size-4 animate-spin" />}
-            Review this board
+            {busy === "evaluate" ? "Reading the board\u2026" : "Review this board"}
           </button>
 
-          {summary && <p className="text-xs text-muted-foreground">{summary}</p>}
+          {busy === "evaluate" && (
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="space-y-1.5 rounded-xl border border-border/50 p-3">
+                  <div className="h-2.5 w-1/3 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-3/4 animate-pulse rounded bg-muted/70" />
+                  <div className="h-2.5 w-full animate-pulse rounded bg-muted/60" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {summary && (
+            <p className="rounded-lg bg-muted/40 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground text-pretty">
+              {summary}
+            </p>
+          )}
+
+          {!busy && !findings && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Gets a read on single points of failure, missing caches, unclear data flow and scaling limits.
+            </p>
+          )}
 
           {findings?.map((f, i) => (
             <div
               key={i}
               onMouseEnter={() => highlight(f.refs)}
               onMouseLeave={() => game?.clearPreview()}
-              className="rounded-lg border border-border/60 p-2.5"
+              className={`border-l-2 py-1.5 pl-3 transition-colors hover:bg-accent/30 ${SEVERITY[f.severity]?.rule}`}
             >
-              <p className={`text-xs font-medium ${SEVERITY[f.severity]}`}>
-                {f.severity} · {f.category}
+              <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide">
+                <span className={`size-1.5 rounded-full ${SEVERITY[f.severity]?.dot}`} />
+                <span className={SEVERITY[f.severity]?.text}>{f.severity}</span>
+                <span className="text-muted-foreground/60">{f.category}</span>
               </p>
-              <p className="mt-0.5 text-sm font-medium">{f.title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{f.detail}</p>
+              <p className="mt-1 text-[13px] font-medium leading-snug text-pretty">{f.title}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground text-pretty">{f.detail}</p>
               <button
                 onClick={() => propose(f.suggestion)}
                 disabled={busy !== null}
-                className="mt-2 rounded-md border border-border/60 px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
+                className="mt-1.5 text-[11px] font-medium text-primary transition-opacity hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-40"
               >
-                Apply this
+                Propose a fix
               </button>
             </div>
           ))}

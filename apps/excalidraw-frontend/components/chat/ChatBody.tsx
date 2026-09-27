@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { ArrowUp, MessagesSquare } from "lucide-react";
 import type { Game } from "@/draw";
 import { serializeBoard } from "@/draw/ai/serialize-board";
 
@@ -77,40 +77,77 @@ export default function ChatBody({
     setDraft("");
   };
 
+  const isAI = (m: Message) => m.kind !== "user";
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
         {messages.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            Say something, or start a message with <span className="font-medium text-foreground">@ai</span> to ask about the board.
-          </p>
-        )}
-        {messages.map((m) => (
-          <div key={m.id} className={m.kind === "user" ? "" : "rounded-lg border border-border/50 bg-muted/40 p-2.5"}>
-            <p className="text-[11px] font-medium text-muted-foreground">{m.name}</p>
-            <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">
-              {m.text}
-              {m.streaming && <span className="ml-0.5 animate-pulse">|</span>}
+          <div className="mt-8 text-center">
+            <MessagesSquare className="mx-auto size-5 text-muted-foreground/60" strokeWidth={1.75} />
+            <p className="mt-2 text-[12px] font-medium">No messages yet</p>
+            <p className="mx-auto mt-1 max-w-[32ch] text-[11px] leading-relaxed text-muted-foreground">
+              Talk to the room, or start with{" "}
+              <span className="rounded bg-primary/12 px-1 py-0.5 font-medium text-primary">@ai</span>{" "}
+              to ask about what is on the board.
             </p>
           </div>
+        )}
+
+        {messages.map((m) => (
+          <article key={m.id} className="group">
+            <div className="mb-1 flex items-baseline gap-2">
+              <span className={`text-[11px] font-semibold ${isAI(m) ? "text-primary" : "text-foreground"}`}>
+                {m.name}
+              </span>
+              {isAI(m) && (
+                <span className="rounded bg-primary/12 px-1 text-[9px] font-medium uppercase tracking-wide text-primary">
+                  ai
+                </span>
+              )}
+            </div>
+            <p
+              className={`whitespace-pre-wrap text-[13px] leading-relaxed text-pretty ${
+                isAI(m)
+                  ? "border-l-2 border-primary/25 pl-3 text-foreground/90"
+                  : "text-foreground/80"
+              }`}
+            >
+              {m.text}
+              {m.streaming && (
+                <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-primary" />
+              )}
+            </p>
+          </article>
         ))}
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-border/60 p-3">
-        <div className="flex gap-1.5">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Message, or @ai..."
-            className="h-9 flex-1 rounded-lg border border-border/60 bg-background px-3 text-sm outline-none focus:border-ring"
-          />
-          <button onClick={send} title="Send" className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Send className="size-4" />
-          </button>
+      <div className="px-4 pb-4">
+        <div className="rounded-xl border border-border/60 bg-card/40 p-1 transition-colors focus-within:border-primary/40">
+          <div className="flex items-end gap-1">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Message the room, or @ai\u2026"
+              aria-label="Message"
+              className="h-9 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground/60"
+            />
+            <button
+              onClick={send}
+              disabled={draft.trim().length === 0}
+              title="Send"
+              aria-label="Send message"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+            >
+              <ArrowUp className="size-4" strokeWidth={2.25} />
+            </button>
+          </div>
         </div>
-        <p className="mt-2 text-[10px] text-muted-foreground">@ai runs on your key and can read the board, not change it.</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+          @ai runs on your key. It reads the board but cannot change it.
+        </p>
       </div>
     </div>
   );
