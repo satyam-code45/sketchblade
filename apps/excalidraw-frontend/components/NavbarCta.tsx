@@ -15,7 +15,7 @@ export function NavbarCta() {
     return (
       <Button
         size="sm"
-        className="border-0 bg-violet-600 text-white hover:bg-violet-700"
+        className="border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
         asChild
       >
         <Link href="/dashboard">Dashboard</Link>
@@ -30,7 +30,7 @@ export function NavbarCta() {
       </Button>
       <Button
         size="sm"
-        className="border-0 bg-violet-600 text-white hover:bg-violet-700"
+        className="border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
         asChild
       >
         <Link href="/sign-up">Get Started</Link>

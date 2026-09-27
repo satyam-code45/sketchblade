@@ -19,8 +19,8 @@ const features = [
     title: "Multiple Drawing Tools",
     description:
       "Freehand pencil, rectangles, and circles to sketch wireframes, diagrams, or anything your team needs.",
-    color: "text-violet-500",
-    bg: "bg-violet-500/10",
+    color: "text-primary",
+    bg: "bg-primary/10",
   },
   {
     icon: Users,
@@ -65,12 +65,12 @@ export default function Page() {
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
 
-      <main>
+      <main id="main">
         {/* ── Hero ── */}
         <section className="relative overflow-hidden pt-20 pb-24 px-4 sm:px-6 lg:px-8">
           {/* Ambient glow */}
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute left-1/2 top-0 h-[420px] w-[700px] -translate-x-1/2 rounded-full bg-violet-500/10 blur-3xl" />
+            <div className="absolute left-1/2 top-0 h-[420px] w-[700px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
           </div>
 
           <div className="relative mx-auto max-w-7xl">
@@ -78,14 +78,14 @@ export default function Page() {
 
               {/* Left — copy */}
               <div>
-                <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
+                <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                   Real-time Collaborative Drawing
                 </div>
 
                 <h1 className="mb-6 text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
                   Sketch.{" "}
-                  <span className="text-violet-600 dark:text-violet-400">
+                  <span className="text-primary">
                     Collaborate.
                   </span>
                   <br />
@@ -259,7 +259,7 @@ export default function Page() {
                   <p className="text-xs text-muted-foreground">Active now</p>
                   <p className="text-sm font-semibold">3 users drawing</p>
                 </div>
-                <div className="absolute -right-5 -top-5 rounded-xl bg-violet-600 px-4 py-2.5 text-white shadow-lg">
+                <div className="absolute -right-5 -top-5 rounded-xl bg-primary px-4 py-2.5 text-primary-foreground shadow-lg">
                   <p className="text-xs opacity-80">WebSocket sync</p>
                   <p className="text-sm font-semibold">Live updates</p>
                 </div>
@@ -275,7 +275,7 @@ export default function Page() {
         >
           <div className="mx-auto max-w-7xl">
             <div className="mb-16 text-center">
-              <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+              <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">
                 Features
               </p>
               <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
@@ -293,7 +293,7 @@ export default function Page() {
                 return (
                   <div
                     key={feature.title}
-                    className="rounded-2xl border border-border bg-card p-6 transition-all hover:border-violet-500/30 hover:shadow-lg"
+                    className="rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-lg"
                   >
                     <div
                       className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl ${feature.bg}`}
@@ -318,7 +318,7 @@ export default function Page() {
         >
           <div className="mx-auto max-w-7xl">
             <div className="mb-16 text-center">
-              <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+              <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">
                 How it works
               </p>
               <h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
@@ -333,8 +333,8 @@ export default function Page() {
             <div className="grid gap-10 md:grid-cols-3">
               {steps.map((step) => (
                 <div key={step.number} className="flex flex-col items-center text-center">
-                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10">
-                    <span className="font-mono text-2xl font-bold text-violet-600 dark:text-violet-400">
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
+                    <span className="font-mono text-2xl font-bold text-primary">
                       {step.number}
                     </span>
                   </div>
@@ -351,7 +351,7 @@ export default function Page() {
         {/* ── CTA Banner ── */}
         <section className="py-24 px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-4xl">
-            <div className="relative overflow-hidden rounded-3xl bg-violet-600 p-12 text-center text-white">
+            <div className="relative overflow-hidden rounded-3xl bg-primary p-12 text-center text-primary-foreground">
               {/* Dot pattern overlay */}
               <div className="pointer-events-none absolute inset-0 opacity-10">
                 <svg width="100%" height="100%">
@@ -375,14 +375,14 @@ export default function Page() {
                 <h2 className="mb-4 text-3xl font-bold sm:text-4xl">
                   Ready to draw together?
                 </h2>
-                <p className="mx-auto mb-8 max-w-md text-lg text-violet-100">
+                <p className="mx-auto mb-8 max-w-md text-lg text-primary-foreground/85">
                   SketchBlade is free to use. Create your account and start
                   collaborating in seconds.
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
                   <Button
                     size="lg"
-                    className="gap-2 border-0 bg-white font-semibold text-violet-700 hover:bg-violet-50"
+                    className="gap-2 border-0 bg-primary-foreground font-semibold text-primary transition-all hover:brightness-95 active:scale-[0.99]"
                     asChild
                   >
                     <Link href="/sign-up">

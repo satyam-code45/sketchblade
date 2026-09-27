@@ -106,8 +106,8 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background/95 p-6 text-center shadow-xl backdrop-blur-md">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
-            <Wifi className="size-6 text-red-500" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+            <Wifi className="size-6 text-destructive" />
           </div>
           <h2 className="text-base font-semibold">Couldn&apos;t join this room</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -124,7 +124,7 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
             </button>
             <button
               onClick={() => router.push("/sign-in")}
-              className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700"
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
             >
               Sign in again
             </button>
@@ -138,8 +138,8 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-background/95 p-6 text-center shadow-xl backdrop-blur-md">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-violet-600/10">
-            <Wifi className="size-6 text-violet-500" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+            <Wifi className="size-6 text-primary" />
           </div>
           <h2 className="text-base font-semibold">Connecting to room…</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -151,7 +151,7 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
-                className="h-2 w-2 rounded-full bg-violet-500 animate-bounce"
+                className="h-2 w-2 rounded-full bg-primary animate-bounce"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}

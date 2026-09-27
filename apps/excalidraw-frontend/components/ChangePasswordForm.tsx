@@ -80,7 +80,7 @@ export default function ChangePasswordForm() {
             Your new password is active. You&apos;re still signed in.
           </p>
           <Button
-            className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+            className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
             onClick={() => router.push("/")}
           >
             Back to Home
@@ -163,7 +163,7 @@ export default function ChangePasswordForm() {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button
-          className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+          className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
           onClick={handleSubmit}
           disabled={loading}
         >
@@ -173,7 +173,7 @@ export default function ChangePasswordForm() {
         <p className="text-center text-sm text-muted-foreground">
           <Link
             href="/"
-            className="font-medium text-violet-600 hover:underline dark:text-violet-400"
+            className="font-medium text-primary hover:underline"
           >
             Cancel
           </Link>

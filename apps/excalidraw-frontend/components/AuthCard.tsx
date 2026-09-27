@@ -2,7 +2,7 @@ import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 
 const LogoIcon = () => (
-  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white">
+  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path
         d="M2 14L5.5 10.5L10.5 5.5L12.5 7.5L7.5 12.5L2 14Z"
@@ -35,12 +35,13 @@ export default function AuthCard({
     <div className="relative min-h-screen bg-background">
       {/* Ambient glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-0 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-violet-500/10 blur-3xl" />
+        <div className="absolute left-1/2 top-[-10%] h-[420px] w-[620px] -translate-x-1/2 rounded-full bg-primary/12 blur-[100px]" />
+        <div className="absolute bottom-[-15%] right-[-5%] h-[360px] w-[420px] rounded-full bg-primary/[0.07] blur-[100px]" />
       </div>
 
       {/* Header */}
       <header className="relative flex items-center justify-between p-6">
-        <Link href="/" className="inline-flex items-center gap-2.5 font-semibold text-base">
+        <Link href="/" className="inline-flex items-center gap-2.5 text-[15px] font-semibold tracking-tight transition-opacity hover:opacity-80">
           <LogoIcon />
           <span>SketchBlade</span>
         </Link>
@@ -48,14 +49,15 @@ export default function AuthCard({
       </header>
 
       {/* Centered form */}
-      <main className="relative flex min-h-[calc(100vh-88px)] items-center justify-center px-4 pb-16">
+      <main id="main" className="relative flex min-h-[calc(100vh-88px)] items-center justify-center px-4 pb-16">
         <div className="w-full max-w-sm">
-          <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold">{title}</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">{subtitle}</p>
+          <div className="mb-7 text-center">
+            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em]">{title}</h1>
+            <p className="mx-auto mt-2 max-w-[34ch] text-[13px] leading-relaxed text-muted-foreground">{subtitle}</p>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+          {/* Tinted shadow rather than black, so it sits in the palette */}
+          <div className="rounded-2xl border border-border/70 bg-card/80 p-8 shadow-[0_1px_0_0_oklch(1_0_0/0.04)_inset,0_16px_40px_-20px_oklch(0.15_0.04_293/0.5)] backdrop-blur-sm">
             {children}
           </div>
         </div>

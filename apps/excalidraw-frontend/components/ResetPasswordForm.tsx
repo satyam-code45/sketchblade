@@ -65,7 +65,7 @@ export default function ResetPasswordForm() {
             You can now sign in with your new password.
           </p>
           <Button
-            className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+            className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
             onClick={() => router.push("/sign-in")}
           >
             Go to Sign In
@@ -138,7 +138,7 @@ export default function ResetPasswordForm() {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button
-          className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+          className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
           onClick={handleSubmit}
           disabled={loading}
         >
@@ -149,7 +149,7 @@ export default function ResetPasswordForm() {
           Need a new token?{" "}
           <Link
             href="/forgot-password"
-            className="font-medium text-violet-600 hover:underline dark:text-violet-400"
+            className="font-medium text-primary hover:underline"
           >
             Request one
           </Link>

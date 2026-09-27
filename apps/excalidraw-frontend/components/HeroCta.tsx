@@ -23,7 +23,7 @@ export function HeroCta() {
         {isLoggedIn ? (
           <Button
             size="lg"
-            className="gap-2 border-0 bg-violet-600 text-white hover:bg-violet-700"
+            className="gap-2 border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
             asChild
           >
             <Link href="/dashboard">
@@ -35,7 +35,7 @@ export function HeroCta() {
           <>
             <Button
               size="lg"
-              className="gap-2 border-0 bg-violet-600 text-white hover:bg-violet-700"
+              className="gap-2 border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
               asChild
             >
               <Link href="/sign-up">

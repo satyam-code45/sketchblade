@@ -180,7 +180,7 @@ export default function Dashboard() {
             <ThemeToggle />
             {userName && (
               <div
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/15 text-sm font-semibold text-violet-600 dark:text-violet-400"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary"
                 title={userName}
               >
                 {userName[0]?.toUpperCase()}
@@ -200,13 +200,13 @@ export default function Dashboard() {
       </header>
 
       {/* ── Main ── */}
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <main id="main" className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
 
         {/* Greeting */}
         <div className="mb-10">
           {!loadingRooms && (
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-600 dark:text-violet-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               {rooms.length === 0
                 ? "No rooms yet"
                 : `${rooms.length} room${rooms.length !== 1 ? "s" : ""} · SketchBlade`}
@@ -226,8 +226,8 @@ export default function Dashboard() {
           {/* Create Room */}
           <div className="rounded-2xl border border-border bg-card p-6">
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
-                <Plus className="size-5 text-violet-600 dark:text-violet-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                <Plus className="size-5 text-primary" />
               </div>
               <div>
                 <h2 className="font-semibold">Create a Room</h2>
@@ -277,7 +277,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex gap-2">
                   <Button
-                    className="flex-1 border-0 bg-violet-600 text-white hover:bg-violet-700"
+                    className="flex-1 border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
                     onClick={() => router.push(`/canvas/${createdRoom.id}`)}
                   >
                     Open Room <ArrowRight className="ml-1.5 size-4" />
@@ -325,7 +325,7 @@ export default function Dashboard() {
                   <p className="text-xs text-destructive">{createError}</p>
                 )}
                 <Button
-                  className="w-full gap-2 border-0 bg-violet-600 text-white hover:bg-violet-700"
+                  className="w-full gap-2 border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
                   onClick={createRoom}
                   disabled={creating}
                 >
@@ -430,12 +430,12 @@ export default function Dashboard() {
               {rooms.map((room) => (
                 <div
                   key={room.id}
-                  className="rounded-2xl border border-border bg-card p-5 transition-all hover:border-violet-500/30 hover:shadow-md"
+                  className="rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-md"
                 >
                   <div className="mb-4">
                     <div className="flex items-start gap-2.5">
-                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
-                        <Pencil className="size-4 text-violet-600 dark:text-violet-400" />
+                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                        <Pencil className="size-4 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold">{room.name ?? room.slug}</p>
@@ -478,7 +478,7 @@ export default function Dashboard() {
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      className="flex-1 border-0 bg-violet-600 text-white hover:bg-violet-700"
+                      className="flex-1 border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
                       onClick={() => router.push(`/canvas/${room.id}`)}
                     >
                       Open

@@ -61,7 +61,7 @@ export default function SignInForm() {
             <label className="text-sm font-medium">Password</label>
             <Link
               href="/forgot-password"
-              className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               Forgot password?
             </Link>
@@ -89,7 +89,7 @@ export default function SignInForm() {
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button
-          className="w-full border-0 bg-violet-600 text-white hover:bg-violet-700"
+          className="w-full border-0 bg-primary text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99]"
           onClick={handleSubmit}
           disabled={loading}
         >
@@ -100,7 +100,7 @@ export default function SignInForm() {
           Don&apos;t have an account?{" "}
           <Link
             href="/sign-up"
-            className="font-medium text-violet-600 hover:underline dark:text-violet-400"
+            className="font-medium text-primary hover:underline"
           >
             Sign Up
           </Link>
