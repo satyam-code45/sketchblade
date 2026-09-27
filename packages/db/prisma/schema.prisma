@@ -55,6 +55,8 @@ model Chat {
   message String
   // user | ai | system; AI replies have no author
   kind String @default("user")
+  // For assistant turns: what it did, plus title/nodes/cost for rendering.
+  meta Json?
 
   roomId Int
   room   Room @relation(fields: [roomId], references: [id])
