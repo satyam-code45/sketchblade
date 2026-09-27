@@ -10,7 +10,8 @@ export { seal, open, fingerprint, last4, type SealedKey } from "./crypto.ts";
 export { redact } from "./redact.ts";
 export { resolveCredential, FREE_TIER_DAILY_CALLS, type Preference, type StoredCredential } from "./credentials.ts";
 export { PRICES, modelFor, costOf } from "./models.ts";
-export { EvaluationSchema, EditDiffSchema, EVALUATE_SYSTEM, EDIT_SYSTEM, EDITABLE_FIELDS, type Evaluation, type EditDiff } from "./review.ts";
+export { EvaluationSchema, EditDiffSchema, EVALUATE_SYSTEM, EDIT_SYSTEM, EDITABLE_FIELDS, AnswerSchema, ANSWER_SYSTEM, type Evaluation, type EditDiff } from "./review.ts";
+export { IntentSchema, INTENT_SYSTEM, type Intent } from "./intent.ts";
 export { DiagramSchema, clamp, DIAGRAM_SYSTEM, type Diagram, type DiagramNode, type DiagramConnection } from "./diagram.ts";
 
 export type AIResult<T> = {
