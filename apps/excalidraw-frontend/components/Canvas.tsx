@@ -825,6 +825,9 @@ export default function Canvas({
 
       {/* ── Bottom-left: zoom ── */}
       <div className="absolute bottom-4 left-4 z-20 flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/90 p-1 shadow-lg backdrop-blur-md">
+        <p className="ml-1.5 mr-1 hidden text-[11px] text-muted-foreground xl:block">
+          <kbd className="font-mono">Ctrl+scroll</kbd> zoom · <kbd className="font-mono">H</kbd> pan
+        </p>
         <button
           onClick={() => gameRef.current?.zoomOut()}
           title="Zoom out  −"
@@ -856,16 +859,9 @@ export default function Canvas({
         </button>
       </div>
 
-      {/* ── Keyboard hint (bottom-right) ── */}
-      <div className="absolute bottom-4 right-4 z-20 rounded-xl border border-border/60 bg-background/80 px-3 py-2 shadow-sm backdrop-blur-md">
-        <p className="text-[11px] text-muted-foreground">
-          <kbd className="font-mono">Ctrl+scroll</kbd> to zoom · <kbd className="font-mono">H</kbd> to pan
-        </p>
-      </div>
-
       {/* ── Selection status (select tool) ── */}
       {selection.count > 0 && (
-        <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
+        <div className="absolute bottom-[4.25rem] left-1/2 z-20 flex max-w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
           <p className="text-[11px] text-muted-foreground">
             <span className="font-medium text-foreground">
               {selection.count === 1 ? "1 shape" : `${selection.count} shapes`} selected

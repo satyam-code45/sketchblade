@@ -130,7 +130,7 @@ export default function ChatBody({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Message the room, or @ai\u2026"
+              placeholder="Message the room, or @ai…"
               aria-label="Message"
               className="h-9 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground/60"
             />

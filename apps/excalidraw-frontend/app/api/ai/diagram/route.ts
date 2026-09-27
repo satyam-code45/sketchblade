@@ -2,24 +2,22 @@ import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/api-auth";
 import { callAI } from "@/lib/ai-call";
 import { log } from "@/lib/log";
-import { DiagramSchema, clamp, PRESETS, isAIError, type PresetId } from "@repo/ai";
+import { DiagramSchema, clamp, DIAGRAM_SYSTEM, isAIError } from "@repo/ai";
 
 export async function POST(req: Request) {
   const userId = getUserId(req);
   if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const { prompt, preset = "diagram" } = await req.json();
+  const { prompt } = await req.json();
   if (typeof prompt !== "string" || prompt.trim().length < 3) {
     return NextResponse.json({ message: "Describe what you want to draw." }, { status: 400 });
   }
-
-  const chosen = PRESETS[preset as PresetId] ?? PRESETS.diagram;
 
   try {
     const { result, onPlatformKey } = await callAI({
       userId,
       task: "diagram",
-      system: chosen.system,
+      system: DIAGRAM_SYSTEM,
       user: prompt.trim(),
       schema: DiagramSchema,
       schemaName: "diagram",

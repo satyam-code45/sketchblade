@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import type { Game, Shape } from "@/draw";
 import { serializeBoard } from "@/draw/ai/serialize-board";
 import { classifyDiff, applyToShape, type Change } from "@/draw/ai/apply-diff";
@@ -138,7 +138,8 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
   const skipped = changes?.filter((c) => c.status !== "applicable").length ?? 0;
 
   return (
-    <div className="h-full space-y-3 overflow-y-auto px-4 pb-4">
+    <div className="flex h-full flex-col">
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 pb-4">
       {!changes && (
         <>
           <button
@@ -147,7 +148,7 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
             className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border/60 bg-card/40 text-[13px] font-medium transition-all duration-200 hover:border-primary/40 hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98] disabled:opacity-40"
           >
             {busy === "evaluate" && <Loader2 className="size-4 animate-spin" />}
-            {busy === "evaluate" ? "Reading the board\u2026" : "Review this board"}
+            {busy === "evaluate" ? "Reading the board…" : "Review this board"}
           </button>
 
           {busy === "evaluate" && (
@@ -198,22 +199,6 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
             </div>
           ))}
 
-          <div className="flex gap-2">
-            <input
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && propose(instruction)}
-              placeholder="Or describe a change…"
-              className="h-9 flex-1 rounded-lg border border-border/60 bg-background px-3 text-sm outline-none focus:border-ring"
-            />
-            <button
-              onClick={() => propose(instruction)}
-              disabled={busy !== null || instruction.trim().length < 3}
-              className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
-            >
-              {busy === "edit" ? <Loader2 className="size-4 animate-spin" /> : "Propose"}
-            </button>
-          </div>
         </>
       )}
 
@@ -262,7 +247,43 @@ export default function ReviewPanel({ game }: { game: Game | null }) {
         </>
       )}
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="rounded-lg bg-destructive/10 px-2.5 py-2 text-[12px] text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+
+      {/* Docked like the chat composer so both tabs compose from the same place */}
+      {!changes && (
+        <div className="px-4 pb-4">
+          <div className="rounded-xl border border-border/60 bg-card/40 p-1 transition-colors focus-within:border-primary/40">
+            <div className="flex items-end gap-1">
+              <input
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && propose(instruction)}
+                placeholder="Add a cache between the API and the database…"
+                aria-label="Describe a change"
+                disabled={busy !== null}
+                className="h-9 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
+              />
+              <button
+                onClick={() => propose(instruction)}
+                disabled={busy !== null || instruction.trim().length < 3}
+                title="Propose a change"
+                aria-label="Propose a change"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+              >
+                {busy === "edit" ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowUp className="size-4" strokeWidth={2.25} />}
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+            Changes are proposed, never applied straight to the board.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

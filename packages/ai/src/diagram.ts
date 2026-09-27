@@ -78,36 +78,23 @@ export function clamp(raw: z.infer<typeof DiagramSchema>): Diagram {
   return { title: raw.title.trim().slice(0, 80) || "Diagram", elements, connections };
 }
 
-const QUALITY = `
+// One prompt instead of five presets: the request already says what it is, and
+// the model picks conventions better than a dropdown does.
+export const DIAGRAM_SYSTEM = `You turn a description into a clear, labelled diagram.
+
+Work out what kind of diagram is being asked for and follow its conventions:
+- Process or flow: ellipses for start and end, rectangles for steps, diamonds for
+  decisions, top to bottom.
+- System or architecture: clients and users on the left, services in the middle,
+  datastores and external systems on the right.
+- Screen or wireframe: navigation, headers, content sections, cards and actions as
+  blocks, connected along the user's path.
+- Anything else: group related things and connect them in reading order.
+
 Quality rules:
 - Produce 6 to 10 nodes unless the request is very small.
 - Short labels: 2 to 6 words, no sentences.
 - Connection labels only when they clarify the relationship, otherwise "".
-- Lay nodes out on a clean grid with no overlap: about 300 apart horizontally, 170 vertically.
+- Lay nodes on a clean grid with no overlap: about 300 apart horizontally, 170 vertically.
 - Start near x=0, y=0. Use width 220-280 and height 80-120.
 - Every connection must reference ids that exist in elements.`;
-
-export const PRESETS = {
-  diagram: {
-    name: "Diagram",
-    system: `You turn ideas into clear general diagrams with labelled sections and relationships.${QUALITY}`,
-  },
-  flowchart: {
-    name: "Flowchart",
-    system: `You produce flowcharts. Ellipses for start and end, rectangles for actions, diamonds for decisions. Prefer top-to-bottom flow.${QUALITY}`,
-  },
-  architecture: {
-    name: "Architecture",
-    system: `You produce software architecture diagrams covering clients, frontend, services, APIs, datastores, auth and external systems. Lay users left, services centre, data right.${QUALITY}`,
-  },
-  web: {
-    name: "Web mockup",
-    system: `You produce website wireframes as logical blocks: navigation, headers, content sections, cards, forms and actions.${QUALITY}`,
-  },
-  mobile: {
-    name: "Mobile mockup",
-    system: `You produce mobile app wireframes as logical screens and elements: navigation, inputs, cards, lists and buttons.${QUALITY}`,
-  },
-} as const;
-
-export type PresetId = keyof typeof PRESETS;
