@@ -628,6 +628,14 @@ export class Game {
   }
 
   // Canvas-space point at the center of the current viewport (accounts for pan/zoom)
+  // Pans so a canvas-space point sits in the middle of the viewport.
+  centreOn(point: { x: number; y: number }) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.panX = rect.width / 2 - point.x * this.zoom;
+    this.panY = rect.height / 2 - point.y * this.zoom;
+    this.clearCanvas();
+  }
+
   getViewportCenter() {
     const rect = this.canvas.getBoundingClientRect();
     return this.toCanvas(rect.left + rect.width / 2, rect.top + rect.height / 2);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageSquare, X, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import type { Game } from "@/draw";
 import { serializeBoard } from "@/draw/ai/serialize-board";
 
@@ -14,11 +14,17 @@ type Message = {
   streaming?: boolean;
 };
 
-export default function ChatPanel({ game, roomId }: { game: Game | null; roomId: string }) {
-  const [open, setOpen] = useState(false);
+export default function ChatBody({
+  game,
+  roomId,
+  onUnread,
+}: {
+  game: Game | null;
+  roomId: string;
+  onUnread?: (n: number) => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
-  const [unread, setUnread] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,7 +39,7 @@ export default function ChatPanel({ game, roomId }: { game: Game | null; roomId:
 
     if (type === "chat_message") {
       setMessages((m) => [...m, msg as unknown as Message]);
-      setUnread((u) => (open ? 0 : u + 1));
+      onUnread?.(1);
       return;
     }
     if (type === "ai_stream_start") {
@@ -58,14 +64,10 @@ export default function ChatPanel({ game, roomId }: { game: Game | null; roomId:
         text: msg.kind === "busy" ? "Already answering something — try again in a moment." : "The assistant could not reply.",
       }));
     }
-  }, [open]);
+  }, [onUnread]);
 
-  useEffect(() => {
-    if (game) game.onChat = onEvent;
-  }, [game, onEvent]);
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, open]);
-  useEffect(() => { if (open) setUnread(0); }, [open]);
+  useEffect(() => { if (game) game.onChat = onEvent; }, [game, onEvent]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const send = () => {
     const text = draft.trim();
@@ -76,35 +78,17 @@ export default function ChatPanel({ game, roomId }: { game: Game | null; roomId:
   };
 
   return (
-    <>
-      <button onClick={() => setOpen((v) => !v)} title="Room chat" className="flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent">
-        <MessageSquare className="size-4" />
-        Chat
-        {unread > 0 && (
-          <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{unread}</span>
-        )}
-      </button>
-      {open && (
-    <div className="fixed bottom-20 right-4 z-40 flex h-[420px] w-[320px] max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border/60 bg-background/95 shadow-xl backdrop-blur-md">
-      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
-        <span className="flex items-center gap-2 text-sm font-medium">
-          <MessageSquare className="size-4" /> Room chat
-        </span>
-        <button onClick={() => setOpen(false)} title="Close" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
-          <X className="size-4" />
-        </button>
-      </div>
-
-      <div className="flex-1 space-y-2 overflow-y-auto px-3 py-2">
+    <div className="flex h-full flex-col">
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {messages.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            Say something, or start a message with <span className="font-medium">@ai</span> to ask about the board.
+            Say something, or start a message with <span className="font-medium text-foreground">@ai</span> to ask about the board.
           </p>
         )}
         {messages.map((m) => (
-          <div key={m.id} className={m.kind === "user" ? "" : "rounded-lg bg-muted/50 p-2"}>
+          <div key={m.id} className={m.kind === "user" ? "" : "rounded-lg border border-border/50 bg-muted/40 p-2.5"}>
             <p className="text-[11px] font-medium text-muted-foreground">{m.name}</p>
-            <p className="whitespace-pre-wrap text-sm">
+            <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">
               {m.text}
               {m.streaming && <span className="ml-0.5 animate-pulse">|</span>}
             </p>
@@ -113,21 +97,21 @@ export default function ChatPanel({ game, roomId }: { game: Game | null; roomId:
         <div ref={endRef} />
       </div>
 
-      <div className="flex gap-1.5 border-t border-border/60 p-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Message, or @ai..."
-          className="h-9 flex-1 rounded-lg border border-border/60 bg-background px-3 text-sm outline-none focus:border-ring"
-        />
-        <button onClick={send} title="Send" className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Send className="size-4" />
-        </button>
+      <div className="border-t border-border/60 p-3">
+        <div className="flex gap-1.5">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            placeholder="Message, or @ai..."
+            className="h-9 flex-1 rounded-lg border border-border/60 bg-background px-3 text-sm outline-none focus:border-ring"
+          />
+          <button onClick={send} title="Send" className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Send className="size-4" />
+          </button>
+        </div>
+        <p className="mt-2 text-[10px] text-muted-foreground">@ai runs on your key and can read the board, not change it.</p>
       </div>
-      <p className="px-3 pb-2 text-[10px] text-muted-foreground">@ai runs on your key and can read the board, not change it.</p>
     </div>
-      )}
-    </>
   );
 }

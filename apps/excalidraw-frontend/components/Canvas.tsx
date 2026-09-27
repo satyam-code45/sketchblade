@@ -18,6 +18,7 @@ import {
   Loader2,
   Lock,
   Maximize2,
+  MessageSquare,
   Minus,
   MinusCircle,
   MousePointer2,
@@ -36,8 +37,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { Game, Tool, Shape, SelectionInfo } from "@/draw";
-import AIPanel from "@/components/ai/AIPanel";
-import ChatPanel from "@/components/chat/ChatPanel";
+import AISidebar, { type SidebarTab } from "@/components/ai/AISidebar";
 import FloatingToolbar from "@/components/FloatingToolbar";
 import StickerPicker from "@/components/StickerPicker";
 import { uploadToCloudinary, cloudinaryVideoPoster } from "@/lib/cloudinary";
@@ -191,7 +191,8 @@ export default function Canvas({
 
   // Selection (select tool): move/resize existing shapes, multi-select
   const [selection, setSelection] = useState<SelectionInfo>(EMPTY_SELECTION);
-  const [aiOpen, setAiOpen]       = useState(false);
+  const [sidebar, setSidebar]     = useState<SidebarTab | null>(null);
+  const [unread, setUnread]       = useState(0);
   const [aiBusyBy, setAiBusyBy]   = useState<string | null>(null);
 
   // ── Bootstrap game ──────────────────────────────────────────────────────
@@ -934,7 +935,7 @@ export default function Canvas({
 
       <FloatingToolbar game={gameRef.current} selection={selection} />
 
-      <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2">
+      <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2" style={{ right: sidebar ? "calc(360px + 1rem)" : undefined }}>
         <button
           onClick={async () => {
             const blob = await gameRef.current?.exportPNG({ selectionOnly: selection.count > 0 });
@@ -953,22 +954,38 @@ export default function Canvas({
         </button>
 
         <StickerPicker game={gameRef.current} />
-        <ChatPanel game={gameRef.current} roomId={roomId} />
 
         <button
-          onClick={() => setAiOpen((v) => !v)}
-          title="Generate with AI"
+          onClick={() => { setSidebar((t) => (t === "chat" ? null : "chat")); setUnread(0); }}
+          title="Room chat"
           className={`flex h-10 items-center gap-2 rounded-xl border border-border/60 px-3 text-sm font-medium shadow-lg backdrop-blur-md transition-colors ${
-            aiOpen ? "bg-primary text-primary-foreground" : "bg-background/90 hover:bg-accent"
+            sidebar === "chat" ? "bg-primary text-primary-foreground" : "bg-background/90 hover:bg-accent"
+          }`}
+        >
+          <MessageSquare className="size-4" /> Chat
+          {unread > 0 && sidebar !== "chat" && (
+            <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{unread}</span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setSidebar((t) => (t === "generate" || t === "review" ? null : "generate"))}
+          title="AI assistant"
+          className={`flex h-10 items-center gap-2 rounded-xl border border-border/60 px-3 text-sm font-medium shadow-lg backdrop-blur-md transition-colors ${
+            sidebar === "generate" || sidebar === "review" ? "bg-primary text-primary-foreground" : "bg-background/90 hover:bg-accent"
           }`}
         >
           <Sparkles className="size-4" /> AI
         </button>
       </div>
 
-      {/* ── AI diagram generation ── */}
-
-      {aiOpen && <AIPanel game={gameRef.current} onClose={() => setAiOpen(false)} />}
+      <AISidebar
+        game={gameRef.current}
+        roomId={roomId}
+        tab={sidebar}
+        onTab={setSidebar}
+        onUnread={(n) => setUnread((u) => u + n)}
+      />
 
       {/* ── Video playback modal ── */}
       {videoModal && (
