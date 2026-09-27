@@ -12,7 +12,7 @@
     "db:push": "pnpm --filter=@repo/db db:push",
     "db:generate": "pnpm --filter=@repo/db db:generate",
     "db:studio": "pnpm --filter=@repo/db db:studio",
-    "test": "node --test 'apps/excalidraw-frontend/*.test.ts' 'apps/excalidraw-frontend/draw/*.test.ts' 'apps/excalidraw-frontend/draw/ai/*.test.ts' 'packages/ai/src/*.test.ts'"
+    "test": "node --test 'apps/excalidraw-frontend/*.test.ts' 'apps/excalidraw-frontend/draw/*.test.ts' 'apps/excalidraw-frontend/draw/ai/*.test.ts' 'apps/ws-backend/*.test.mts' 'packages/ai/src/*.test.ts'"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",

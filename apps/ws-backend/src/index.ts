@@ -71,6 +71,8 @@ function deliverLocally(roomId: string, payload: string) {
 startBus(deliverLocally);
 
 // Distinct close codes so the client can tell "log in again" from "bad token".
+// setTimeout's ceiling: larger delays wrap and fire immediately.
+const MAX_TIMEOUT = 2_147_483_647;
 const CLOSE_INVALID = 4001;
 const CLOSE_EXPIRED = 4002;
 
@@ -119,7 +121,12 @@ wss.on("connection", function connection(ws, request) {
     if (!expiresAt) return;
     const ms = expiresAt - Date.now();
     if (ms <= 0) { ws.close(CLOSE_EXPIRED, "token expired"); return; }
-    expiryTimer = setTimeout(() => ws.close(CLOSE_EXPIRED, "token expired"), ms);
+    // setTimeout silently clamps anything over ~24.8 days to 1ms, which closed
+    // every socket instantly on our 30-day tokens. Re-arm in bounded chunks.
+    expiryTimer = setTimeout(
+      () => armExpiry(expiresAt),
+      Math.min(ms, MAX_TIMEOUT),
+    );
   };
   armExpiry(auth.expiresAt);
   ws.on("close", () => clearTimeout(expiryTimer));
