@@ -189,6 +189,7 @@ export default function Canvas({
   const [selection, setSelection] = useState<SelectionInfo>(EMPTY_SELECTION);
   const [sidebar, setSidebar]     = useState(false);
   const [aiBusyBy, setAiBusyBy]   = useState<string | null>(null);
+  const [previewPending, setPreviewPending] = useState(false);
 
   // ── Bootstrap game ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -204,6 +205,9 @@ export default function Canvas({
     );
     gameRef.current = game;
     game.onAIActivity = setAiBusyBy;
+    // Anything inserted should be immediately draggable.
+    game.onInsert = () => setSelectedTool("select");
+    game.onPreviewChange = setPreviewPending;
 
     // Observe the element rather than the window: the canvas is sized by CSS,
     // and measuring the window instead let the backing buffer drift from the
@@ -301,6 +305,14 @@ export default function Canvas({
         }
         return;
       }
+      if (e.key === "Escape" && game?.hasPreview()) {
+        game.requestDiscardPreview?.();
+        return;
+      }
+      if (e.key === "Enter" && game?.hasPreview()) {
+        game.requestPlacePreview?.();
+        return;
+      }
       if (e.key === "Escape") {
         // On any drawing tool, Escape backs out to Select (matches "Esc = pointer mode").
         // Already on Select — Escape just clears whatever's selected.
@@ -364,9 +376,9 @@ export default function Canvas({
       const w = ratio >= 1 ? maxDim : maxDim * ratio;
       const h = ratio >= 1 ? maxDim / ratio : maxDim;
       const center = game.getViewportCenter();
-      game.addShape({
+      game.addShapes([{
         type: "image", x: center.x - w / 2, y: center.y - h / 2, width: w, height: h, url: secure_url,
-      } as Shape);
+      } as Shape]);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Image upload failed");
     } finally {
@@ -390,10 +402,10 @@ export default function Canvas({
       const w = ratio >= 1 ? maxDim : maxDim * ratio;
       const h = ratio >= 1 ? maxDim / ratio : maxDim;
       const center = game.getViewportCenter();
-      game.addShape({
+      game.addShapes([{
         type: "video", x: center.x - w / 2, y: center.y - h / 2, width: w, height: h,
         url: secure_url, poster: cloudinaryVideoPoster(secure_url),
-      } as Shape);
+      } as Shape]);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Video upload failed");
     } finally {
@@ -914,6 +926,28 @@ export default function Canvas({
           {uploadError}
           <button onClick={() => setUploadError("")} className="ml-2 underline underline-offset-2">
             Dismiss
+          </button>
+        </div>
+      )}
+
+      {previewPending && (
+        <div className="absolute left-1/2 top-[4.75rem] z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-primary/40 bg-background/95 px-3 py-2 shadow-lg backdrop-blur-md duration-150 animate-in fade-in slide-in-from-top-1">
+          <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">Suggestion not placed yet</span>
+            {" — "}<kbd className="font-mono">Enter</kbd> to place · <kbd className="font-mono">Esc</kbd> to discard
+          </p>
+          <button
+            onClick={() => gameRef.current?.requestPlacePreview?.()}
+            className="h-6 rounded-lg bg-primary px-2.5 text-[11px] font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+          >
+            Place
+          </button>
+          <button
+            onClick={() => gameRef.current?.requestDiscardPreview?.()}
+            className="h-6 rounded-lg border border-border/60 px-2.5 text-[11px] transition-colors hover:bg-accent"
+          >
+            Discard
           </button>
         </div>
       )}

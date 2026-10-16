@@ -84,6 +84,16 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
     setTurns((t) => [...t, fromRow(msg as never)]);
   }, []);
   useEffect(() => { if (game) game.onChat = onEvent; }, [game, onEvent]);
+
+  // The canvas banner and its shortcuts resolve the same pending turn the
+  // panel shows, so both routes agree.
+  useEffect(() => {
+    if (!game) return;
+    const pendingId = () => turns.find((t) => t.pending && t.proposedShapes)?.id;
+    game.requestPlacePreview = () => { const id = pendingId(); if (id !== undefined) resolve(id, true); };
+    game.requestDiscardPreview = () => { const id = pendingId(); if (id !== undefined) resolve(id, false); };
+    return () => { game.requestPlacePreview = undefined; game.requestDiscardPreview = undefined; };
+  });
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });

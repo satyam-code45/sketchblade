@@ -159,6 +159,13 @@ export class Game {
   private onSelectionChange?: (info: SelectionInfo) => void;
   onAIActivity?: (who: string | null) => void;
   onChat?: (msg: Record<string, unknown>) => void;
+  // Inserted content is selected, but the old tool stayed active so the handles
+  // could not be used. Drawing goes through addShape and is unaffected.
+  onInsert?: () => void;
+  // Lets the thread drop a pending proposal when the canvas is used instead.
+  requestDiscardPreview?: () => void;
+  requestPlacePreview?: () => void;
+  onPreviewChange?: (active: boolean) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -365,13 +372,17 @@ export class Game {
   setPreview(shapes: Shape[]) {
     this.previewShapes = shapes;
     this.clearCanvas();
+    this.onPreviewChange?.(shapes.length > 0);
   }
 
   clearPreview() {
     if (this.previewShapes.length === 0) return;
     this.previewShapes = [];
     this.clearCanvas();
+    this.onPreviewChange?.(false);
   }
+
+  hasPreview() { return this.previewShapes.length > 0; }
 
   addShapes(shapes: Shape[]) {
     if (shapes.length === 0) return;
@@ -383,6 +394,7 @@ export class Game {
     this.emitSelectionChange();
     this.clearCanvas();
     this.broadcastShapes(shapes);
+    this.onInsert?.();
   }
 
   undo() {
@@ -1266,6 +1278,11 @@ export class Game {
   // ── Mouse ─────────────────────────────────────────────────────────────────
   mouseDownHandler = (e: MouseEvent) => {
     if (e.button !== 0) return;
+
+    // Using the canvas while a suggestion hangs there is a decision: drop it.
+    if (this.previewShapes.length > 0 && this.selectedTool !== "hand") {
+      this.requestDiscardPreview?.();
+    }
 
     if (this.selectedTool === "hand") {
       this.isPanning  = true;
