@@ -1,4 +1,5 @@
 import { getExistingShape } from "./route";
+import { reorder, type Where } from "./reorder";
 
 export type Tool =
   | "select"
@@ -349,25 +350,10 @@ export class Game {
 
   // Array order is paint order, so reordering is a move plus an explicit event —
   // replay is by id, and would otherwise reset the order on reload.
-  reorderSelected(where: "front" | "back" | "forward" | "backward") {
-    const picked = this.existingShapes.filter((s) => s.id && this.selectedIds.has(s.id));
-    if (picked.length === 0) return;
-    const rest = this.existingShapes.filter((s) => !(s.id && this.selectedIds.has(s.id)));
-
-    if (where === "front") this.existingShapes = [...rest, ...picked];
-    else if (where === "back") this.existingShapes = [...picked, ...rest];
-    else {
-      const step = where === "forward" ? 1 : -1;
-      const next = [...this.existingShapes];
-      const indices = picked.map((s) => next.indexOf(s));
-      (step > 0 ? indices.reverse() : indices).forEach((i) => {
-        const j = i + step;
-        if (j < 0 || j >= next.length) return;
-        [next[i], next[j]] = [next[j]!, next[i]!];
-      });
-      this.existingShapes = next;
-    }
-
+  reorderSelected(where: Where) {
+    const next = reorder(this.existingShapes, this.selectedIds, where);
+    if (next === this.existingShapes) return;
+    this.existingShapes = next;
     this.clearCanvas();
     this.socket.send(JSON.stringify({
       type: "board",

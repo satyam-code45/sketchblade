@@ -22,7 +22,7 @@ export default function FloatingToolbar({ game, selection }: Props) {
   ];
 
   return (
-    <div className="absolute left-1/2 top-4 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border/60 bg-background/90 p-1 shadow-lg backdrop-blur-md">
+    <div className="absolute left-1/2 top-[4.75rem] z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-border/60 bg-background/95 p-1 shadow-lg backdrop-blur-md duration-150 animate-in fade-in slide-in-from-top-1">
       <span className="px-2 text-xs text-muted-foreground">{selection.count} selected</span>
       <div className="mx-0.5 h-5 w-px bg-border/60" />
       {actions.map(({ icon: Icon, label, run }) => (

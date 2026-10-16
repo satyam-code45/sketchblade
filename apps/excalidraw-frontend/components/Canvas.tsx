@@ -21,7 +21,6 @@ import {
   Minus,
   MinusCircle,
   MousePointer2,
-  Palette,
   Pencil,
   PlusCircle,
   RotateCcw,
@@ -176,10 +175,8 @@ export default function Canvas({
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [fontSize, setFontSize]       = useState(20);
 
-  // Canvas background — separate from shape style, lives in its own small popover
+  // Board-level background, shown alongside the shape style controls
   const [canvasColor, setCanvasColor]     = useState<string | null>(null);
-  const [canvasColorOpen, setCanvasColorOpen] = useState(false);
-  const canvasColorRef                    = useRef<HTMLDivElement>(null);
 
   // Image / video insert via Cloudinary
   const imageInputRef             = useRef<HTMLInputElement>(null);
@@ -349,17 +346,6 @@ export default function Canvas({
     return () => document.removeEventListener("mousedown", handler);
   }, [presenceOpen]);
 
-  // ── Canvas background popover: close on outside click ───────────────────
-  useEffect(() => {
-    if (!canvasColorOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (canvasColorRef.current && !canvasColorRef.current.contains(e.target as Node)) {
-        setCanvasColorOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [canvasColorOpen]);
 
   // ── Image / video insert (Cloudinary) ───────────────────────────────────
   const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -476,7 +462,52 @@ export default function Canvas({
 
       {/* ── Left: contextual style panel (Excalidraw-style) ── */}
       {showStylePanel && (
-        <div className="absolute left-4 top-24 z-20 w-52 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border border-border/60 bg-background/90 p-3 shadow-lg backdrop-blur-md">
+        <div className="absolute left-4 top-[8.5rem] z-20 max-h-[calc(100dvh-10rem)] w-52 overflow-y-auto rounded-xl border border-border/60 bg-background/90 p-3 shadow-lg backdrop-blur-md duration-150 animate-in fade-in slide-in-from-top-1">
+          {/* Board-level, so it lives with the other style controls rather than
+              in the tool strip, where a scroll container clipped its popover. */}
+          <div className="mb-3 border-b border-border/40 pb-3">
+            <>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Canvas background
+              </p>
+              <div className="grid grid-cols-8 gap-1.5">
+                {BG_COLOR_SWATCHES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCanvasColor(c)}
+                    title={c}
+                    className={[
+                      "size-6 rounded-full border shadow-sm transition-transform hover:scale-110",
+                      canvasColor === c ? "border-primary ring-2 ring-ring/50" : "border-border/60",
+                    ].join(" ")}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+              <div className="mt-2.5 flex items-center gap-1.5">
+                <input
+                  type="color"
+                  value={canvasColor ?? "#f8f9fa"}
+                  onChange={(e) => setCanvasColor(e.target.value)}
+                  className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
+                  title="Custom background"
+                />
+                <HexColorInput value={canvasColor ?? "#f8f9fa"} onCommit={setCanvasColor} />
+              </div>
+              <button
+                onClick={() => setCanvasColor(null)}
+                className={[
+                  "mt-2 w-full rounded-md px-2 py-1 text-[11px] transition-colors",
+                  canvasColor === null
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                ].join(" ")}
+              >
+                Auto (theme)
+              </button>
+            </>
+          </div>
+
           {/* Stroke color */}
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stroke</p>
           <div className="grid grid-cols-8 gap-1.5">
@@ -645,66 +676,6 @@ export default function Canvas({
             </React.Fragment>
           ))}
 
-          {/* Canvas background — independent of tool/selection */}
-          <div className="mx-1 h-6 w-px bg-border/60" />
-          <div ref={canvasColorRef} className="relative">
-            <button
-              onClick={() => setCanvasColorOpen((v) => !v)}
-              aria-label="Canvas background"
-              className="group relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              {canvasColor ? (
-                <span className="size-[16px] rounded-full border border-border/60 shadow-sm" style={{ backgroundColor: canvasColor }} />
-              ) : (
-                <Palette className="size-[18px]" />
-              )}
-              <span className="pointer-events-none absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-foreground shadow-md opacity-0 transition-opacity group-hover:opacity-100 backdrop-blur-sm">
-                Canvas background
-              </span>
-            </button>
-            {canvasColorOpen && (
-              <div className="absolute left-1/2 top-full mt-2 w-56 -translate-x-1/2 rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Canvas background
-                </p>
-                <div className="grid grid-cols-8 gap-1.5">
-                  {BG_COLOR_SWATCHES.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setCanvasColor(c)}
-                      title={c}
-                      className={[
-                        "size-6 rounded-full border shadow-sm transition-transform hover:scale-110",
-                        canvasColor === c ? "border-primary ring-2 ring-ring/50" : "border-border/60",
-                      ].join(" ")}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2.5 flex items-center gap-1.5">
-                  <input
-                    type="color"
-                    value={canvasColor ?? "#f8f9fa"}
-                    onChange={(e) => setCanvasColor(e.target.value)}
-                    className="h-7 w-7 shrink-0 cursor-pointer rounded-md border border-border/60 bg-transparent p-0"
-                    title="Custom background"
-                  />
-                  <HexColorInput value={canvasColor ?? "#f8f9fa"} onCommit={setCanvasColor} />
-                </div>
-                <button
-                  onClick={() => setCanvasColor(null)}
-                  className={[
-                    "mt-2 w-full rounded-md px-2 py-1 text-[11px] transition-colors",
-                    canvasColor === null
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  ].join(" ")}
-                >
-                  Auto (theme)
-                </button>
-              </div>
-            )}
-          </div>
 
           {/* Insert: image / video (uploaded to Cloudinary) */}
           <div className="mx-1 h-6 w-px bg-border/60" />
