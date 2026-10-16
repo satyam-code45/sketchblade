@@ -52,10 +52,10 @@ export default function StickerPicker({ game }: { game: Game | null }) {
   return (
     <>
       <button onClick={() => setOpen((v) => !v)} title="Notes and emoji" className="flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent">
-        <StickyNote className="size-4" /> Notes
+        <StickyNote className="size-4" /> <span className="hidden sm:inline">Notes</span>
       </button>
       {open && (
-    <div className="fixed bottom-20 right-4 z-40 w-[300px] rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
+    <div className="fixed bottom-20 right-4 z-40 w-[min(300px,calc(100vw-2rem))] rounded-xl border border-border/60 bg-background/95 p-3 shadow-xl backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium">Notes and emoji</span>
         <button onClick={() => setOpen(false)} title="Close" className="rounded-md p-1 text-muted-foreground hover:bg-accent">

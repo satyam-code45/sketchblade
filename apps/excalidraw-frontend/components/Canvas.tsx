@@ -208,15 +208,28 @@ export default function Canvas({
     gameRef.current = game;
     game.onAIActivity = setAiBusyBy;
 
-    // Resize (not just re-set canvas.width/height directly) so the backing buffer
-    // stays scaled to devicePixelRatio — otherwise strokes/text render blurry on
-    // high-DPI screens.
-    const onResize = () => game.resize(window.innerWidth, window.innerHeight);
-    window.addEventListener("resize", onResize);
+    // Observe the element rather than the window: the canvas is sized by CSS,
+    // and measuring the window instead let the backing buffer drift from the
+    // real box, which offset every click.
+    const observer = new ResizeObserver(() => game.resize());
+    if (canvasRef.current) observer.observe(canvasRef.current);
+    game.resize();
+
+    // Browser zoom changes devicePixelRatio without always firing a resize,
+    // which left the buffer at a stale DPR and rendered soft.
+    let dprQuery: MediaQueryList | null = null;
+    const watchDpr = () => {
+      dprQuery?.removeEventListener("change", watchDpr);
+      game.resize();
+      dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      dprQuery.addEventListener("change", watchDpr);
+    };
+    watchDpr();
 
     return () => {
       game.destory();
-      window.removeEventListener("resize", onResize);
+      observer.disconnect();
+      dprQuery?.removeEventListener("change", watchDpr);
       gameRef.current = null;
     };
   }, [roomId, socket]);
@@ -309,7 +322,8 @@ export default function Canvas({
       if (map[e.key.toLowerCase()]) setSelectedTool(map[e.key.toLowerCase()]);
       if (e.key === "=" || e.key === "+") game?.zoomIn();
       if (e.key === "-") game?.zoomOut();
-      if (e.key === "0") game?.resetView();
+      if (e.key === "0") game?.zoomToActual();
+      if (e.key === "1") game?.resetView();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -604,7 +618,7 @@ export default function Canvas({
         className="absolute left-1/2 top-4 z-20 -translate-x-1/2 transition-[left] duration-200"
         style={{ left: sidebar ? "calc(50% - 190px)" : undefined }}
       >
-        <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/90 p-1.5 shadow-lg backdrop-blur-md">
+        <div className="flex max-w-[calc(100vw-2rem)] items-center gap-0.5 overflow-x-auto rounded-xl border border-border/60 bg-background/90 p-1.5 shadow-lg backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TOOL_GROUPS.map((group, gi) => (
             <React.Fragment key={gi}>
               {gi > 0 && <div className="mx-1 h-6 w-px bg-border/60" />}
@@ -748,8 +762,9 @@ export default function Canvas({
 
       {/* ── Top-right: presence + theme ── */}
       <div
-        className="absolute right-4 top-4 z-20 flex items-center gap-2 transition-[right] duration-200"
-        style={{ right: sidebar ? "calc(380px + 1rem)" : undefined }}
+        className={`absolute top-4 z-20 flex items-center gap-2 transition-[right] duration-200 ${
+          sidebar ? "right-4 sm:right-[calc(380px+1rem)]" : "right-4"
+        }`}
       >
         {/* Online users — clickable dropdown */}
         {onlineUsers.length > 0 && (
@@ -840,9 +855,11 @@ export default function Canvas({
           <ZoomOut className="size-3.5" />
         </button>
         <button
-          onClick={() => gameRef.current?.resetView()}
-          title="Reset zoom  0"
-          className="min-w-[52px] rounded-lg px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          onClick={() => gameRef.current?.zoomToActual()}
+          title="Back to 100%  (0)"
+          className={`min-w-[52px] rounded-lg px-2 py-1 font-mono text-xs transition-colors hover:bg-accent hover:text-foreground ${
+            zoom === 100 ? "text-muted-foreground" : "text-primary"
+          }`}
         >
           {zoom}%
         </button>
@@ -856,7 +873,7 @@ export default function Canvas({
         <div className="mx-0.5 h-4 w-px bg-border/60" />
         <button
           onClick={() => gameRef.current?.resetView()}
-          title="Fit to screen"
+          title="Fit everything on screen  (1)"
           className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
         >
           <Maximize2 className="size-3.5" />
@@ -938,7 +955,11 @@ export default function Canvas({
 
       <FloatingToolbar game={gameRef.current} selection={selection} />
 
-      <div className="absolute bottom-4 right-4 z-30 flex items-center gap-2" style={{ right: sidebar ? "calc(380px + 1rem)" : undefined }}>
+      <div
+        className={`absolute bottom-4 z-30 flex items-center gap-2 transition-[right] duration-200 ${
+          sidebar ? "right-4 sm:right-[calc(380px+1rem)]" : "right-4"
+        }`}
+      >
         <button
           onClick={async () => {
             const blob = await gameRef.current?.exportPNG({ selectionOnly: selection.count > 0 });
@@ -953,7 +974,7 @@ export default function Canvas({
           title={selection.count > 0 ? "Export selection as PNG" : "Export board as PNG"}
           className="flex h-10 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 text-sm font-medium shadow-lg backdrop-blur-md hover:bg-accent"
         >
-          <Download className="size-4" /> Export
+          <Download className="size-4" /> <span className="hidden sm:inline">Export</span>
         </button>
 
         <StickerPicker game={gameRef.current} />
@@ -965,7 +986,7 @@ export default function Canvas({
             sidebar ? "bg-primary text-primary-foreground" : "bg-background/90 hover:bg-accent"
           }`}
         >
-          <Sparkles className="size-4" /> Assistant
+          <Sparkles className="size-4" /> <span className="hidden sm:inline">Assistant</span>
         </button>
       </div>
 

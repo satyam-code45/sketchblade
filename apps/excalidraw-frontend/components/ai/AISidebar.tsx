@@ -27,7 +27,7 @@ export default function AISidebar({ game, roomId, open, onClose }: Props) {
   return (
     <aside
       aria-label="Assistant"
-      className="absolute right-0 top-0 z-40 flex h-full w-[380px] max-w-[calc(100vw-1rem)] flex-col bg-background/80 shadow-[-8px_0_40px_-12px_oklch(0.15_0.04_293/0.5)] backdrop-blur-xl duration-200 animate-in slide-in-from-right-4"
+      className="absolute right-0 top-0 z-40 flex h-full w-full flex-col sm:w-[380px] bg-background/80 shadow-[-8px_0_40px_-12px_oklch(0.15_0.04_293/0.5)] backdrop-blur-xl duration-200 animate-in slide-in-from-right-4"
     >
       {/* 1px inner edge reads as refraction rather than a plain border */}
       <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-white/12 via-white/5 to-transparent" />

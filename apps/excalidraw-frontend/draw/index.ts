@@ -219,12 +219,23 @@ export class Game {
 
   // Resizes the backing canvas to match devicePixelRatio so strokes/text render crisp
   // on high-DPI screens instead of being upscaled from a lower-resolution buffer.
-  resize(cssWidth: number, cssHeight: number) {
-    this.dpr = window.devicePixelRatio || 1;
-    this.logicalWidth = cssWidth;
-    this.logicalHeight = cssHeight;
-    this.canvas.width  = Math.max(1, Math.round(cssWidth * this.dpr));
-    this.canvas.height = Math.max(1, Math.round(cssHeight * this.dpr));
+  resize(cssWidth?: number, cssHeight?: number) {
+    // Measure the element itself: anything else can drift from the CSS box and
+    // offset every pointer coordinate.
+    const r = this.canvas.getBoundingClientRect();
+    const w = cssWidth ?? r.width;
+    const h = cssHeight ?? r.height;
+    const dpr = window.devicePixelRatio || 1;
+    const nextW = Math.max(1, Math.round(w * dpr));
+    const nextH = Math.max(1, Math.round(h * dpr));
+
+    if (this.canvas.width === nextW && this.canvas.height === nextH && this.dpr === dpr) return;
+
+    this.dpr = dpr;
+    this.logicalWidth = w;
+    this.logicalHeight = h;
+    this.canvas.width = nextW;
+    this.canvas.height = nextH;
     this.clearCanvas();
   }
 
@@ -500,12 +511,37 @@ export class Game {
   }
 
   getZoom() { return this.zoom; }
-  zoomIn()  { this.applyZoom(this.zoom * 1.2); }
-  zoomOut() { this.applyZoom(this.zoom / 1.2); }
+  zoomIn()  { const a = this.viewportAnchor(); this.glideZoom(this.zoom * 1.25, a.x, a.y); }
+  zoomOut() { const a = this.viewportAnchor(); this.glideZoom(this.zoom / 1.25, a.x, a.y); }
+
+  // Back to 1:1 without moving what is under the middle of the screen.
+  zoomToActual() {
+    const a = this.viewportAnchor();
+    this.glideZoom(1, a.x, a.y);
+  }
+  // Frames everything drawn; falls back to 1:1 on an empty board.
   resetView() {
-    this.zoom = 1; this.panX = 0; this.panY = 0;
+    if (this.zoomAnim !== null) { cancelAnimationFrame(this.zoomAnim); this.zoomAnim = null; }
+    const b = this.getContentBounds();
+    const r = this.canvas.getBoundingClientRect();
+
+    if (!b || r.width === 0) {
+      this.zoom = 1; this.panX = 0; this.panY = 0;
+      this.clearCanvas();
+      this.onZoomChange?.(1);
+      return;
+    }
+
+    const pad = 80;
+    const fit = Math.min(
+      (r.width - pad) / Math.max(1, b.maxX - b.minX),
+      (r.height - pad) / Math.max(1, b.maxY - b.minY),
+    );
+    this.zoom = Math.min(Math.max(0.05, fit), 2);
+    this.panX = r.width / 2 - ((b.minX + b.maxX) / 2) * this.zoom;
+    this.panY = r.height / 2 - ((b.minY + b.maxY) / 2) * this.zoom;
     this.clearCanvas();
-    this.onZoomChange?.(1);
+    this.onZoomChange?.(this.zoom);
   }
 
   // ── Style controls ──────────────────────────────────────────────────────
@@ -653,6 +689,42 @@ export class Game {
     this.zoom = Math.min(Math.max(0.05, z), 20);
     this.clearCanvas();
     this.onZoomChange?.(this.zoom);
+  }
+
+  // Eases toward a target instead of snapping, keeping the anchor point fixed
+  // so the canvas appears to zoom under the cursor.
+  private zoomAnim: number | null = null;
+
+  private glideZoom(target: number, anchorX: number, anchorY: number) {
+    const to = Math.min(Math.max(0.05, target), 20);
+    if (this.zoomAnim !== null) cancelAnimationFrame(this.zoomAnim);
+
+    const step = () => {
+      const diff = to - this.zoom;
+      // Close enough that another frame would not be visible.
+      if (Math.abs(diff) < to * 0.001) {
+        this.zoomAnim = null;
+        this.zoomAbout(to, anchorX, anchorY);
+        return;
+      }
+      this.zoomAbout(this.zoom + diff * 0.22, anchorX, anchorY);
+      this.zoomAnim = requestAnimationFrame(step);
+    };
+    this.zoomAnim = requestAnimationFrame(step);
+  }
+
+  private zoomAbout(next: number, anchorX: number, anchorY: number) {
+    const z = Math.min(Math.max(0.05, next), 20);
+    this.panX = anchorX - (anchorX - this.panX) * (z / this.zoom);
+    this.panY = anchorY - (anchorY - this.panY) * (z / this.zoom);
+    this.zoom = z;
+    this.clearCanvas();
+    this.onZoomChange?.(this.zoom);
+  }
+
+  private viewportAnchor() {
+    const r = this.canvas.getBoundingClientRect();
+    return { x: r.width / 2, y: r.height / 2 };
   }
 
   private broadcastShapeUpdate(shape: Shape) {
@@ -1604,16 +1676,14 @@ export class Game {
   wheelHandler = (e: WheelEvent) => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
-      const factor  = e.deltaY < 0 ? 1.1 : 0.9;
-      const newZoom = Math.min(Math.max(0.05, this.zoom * factor), 20);
-      const r  = this.canvas.getBoundingClientRect();
+      const r = this.canvas.getBoundingClientRect();
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
-      this.panX = mx - (mx - this.panX) * (newZoom / this.zoom);
-      this.panY = my - (my - this.panY) * (newZoom / this.zoom);
-      this.zoom = newZoom;
-      this.clearCanvas();
-      this.onZoomChange?.(this.zoom);
+      // Trackpads send many small deltas; scale by magnitude so one physical
+      // gesture does not fire dozens of equal steps.
+      const intensity = Math.min(Math.abs(e.deltaY), 50) / 50;
+      const factor = e.deltaY < 0 ? 1 + 0.35 * intensity : 1 - 0.3 * intensity;
+      this.zoomAbout(this.zoom * factor, mx, my);
     } else {
       this.panX -= e.deltaX;
       this.panY -= e.deltaY;
