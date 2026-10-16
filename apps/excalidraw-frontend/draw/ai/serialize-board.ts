@@ -1,6 +1,12 @@
 import type { Shape } from "..";
 
-export type BoardView = { text: string; byAlias: Map<string, Shape> };
+export type BoardView = {
+  text: string;
+  byAlias: Map<string, Shape>;
+  // Box alias -> the text shape drawn inside it, so a request to retitle a box
+  // can be redirected to the shape that actually holds the words.
+  labelOf: Map<string, Shape>;
+};
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -21,15 +27,17 @@ const inside = (b: Box, x: number, y: number) =>
 // model reads it as a diagram rather than a scene graph.
 export function serializeBoard(shapes: Shape[], limit = 60): BoardView {
   const byAlias = new Map<string, Shape>();
+  const labelOf = new Map<string, Shape>();
   const boxes = shapes.filter((s) => boxOf(s)).slice(0, limit);
   const texts = shapes.filter((s) => s.type === "text") as Extract<Shape, { type: "text" }>[];
 
   // Fold a text shape into the box it sits in so the model sees a labelled node.
   const claimed = new Set<Shape>();
-  const labelFor = (s: Shape) => {
+  const labelFor = (s: Shape, alias: string) => {
     const b = boxOf(s)!;
     const hits = texts.filter((t) => !claimed.has(t) && inside(b, t.x, t.y));
     hits.forEach((t) => claimed.add(t));
+    if (hits[0]) labelOf.set(alias, hits[0]);
     return hits.map((t) => t.text).join(" ").trim();
   };
 
@@ -38,9 +46,11 @@ export function serializeBoard(shapes: Shape[], limit = 60): BoardView {
     const alias = `n${i + 1}`;
     byAlias.set(alias, s);
     const b = boxOf(s)!;
-    const label = labelFor(s);
+    const label = labelFor(s, alias);
+    const labelShape = labelOf.get(alias);
+    if (labelShape) byAlias.set(`${alias}L`, labelShape);
     lines.push(
-      `${alias} ${s.type} ${label ? `"${label}"` : "(unlabelled)"} at (${Math.round(b.x)},${Math.round(b.y)}) ${Math.round(b.width)}x${Math.round(b.height)} v${s.version ?? 0}`,
+      `${alias} ${s.type} ${label ? `"${label}"` : "(unlabelled)"}${labelShape ? ` label=${alias}L` : ""} at (${Math.round(b.x)},${Math.round(b.y)}) ${Math.round(b.width)}x${Math.round(b.height)} v${s.version ?? 0}`,
     );
   });
 
@@ -60,7 +70,7 @@ export function serializeBoard(shapes: Shape[], limit = 60): BoardView {
     lines.push(`${alias} text "${t.text}" at (${Math.round(t.x)},${Math.round(t.y)}) v${t.version ?? 0}`);
   });
 
-  return { text: lines.join("\n") || "(the board is empty)", byAlias };
+  return { text: lines.join("\n") || "(the board is empty)", byAlias, labelOf };
 }
 
 function nearest(boxes: Shape[], x: number, y: number, byAlias: Map<string, Shape>): string | null {

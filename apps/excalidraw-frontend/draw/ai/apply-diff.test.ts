@@ -81,3 +81,37 @@ test("numeric fields are coerced and nonsense is ignored", () => {
   assert.equal((applyToShape(s, "x", "banana") as { x: number }).x, 0);
   assert.equal((applyToShape(s, "color", "#fff") as { color: string }).color, "#fff");
 });
+
+test("retitling a box is redirected to the text inside it", () => {
+  const box = shape("box", 1);
+  const label: Shape = { type: "text", id: "lbl", x: 10, y: 10, text: "Old", version: 1 };
+  const changes = classifyDiff(
+    diff({ modify: [{ ref: "n1", version: 1, field: "text" as const, value: "New" }] }),
+    new Map([["n1", box]]),
+    [box, label],
+    new Map([["n1", label]]),
+  );
+  assert.equal(changes[0]!.status, "applicable");
+  assert.equal((changes[0] as { id: string }).id, "lbl");
+});
+
+// Previously this applied silently and the user was told it worked.
+test("a field the shape cannot hold is reported, not silently dropped", () => {
+  const box = shape("box", 1);
+  const changes = classifyDiff(
+    diff({ modify: [{ ref: "n1", version: 1, field: "text" as const, value: "New" }] }),
+    new Map([["n1", box]]),
+    [box],
+  );
+  assert.equal(changes[0]!.status, "unsupported");
+});
+
+test("editing a standalone text still works", () => {
+  const t: Shape = { type: "text", id: "t1", x: 0, y: 0, text: "Draft", version: 2 };
+  const changes = classifyDiff(
+    diff({ modify: [{ ref: "t1", version: 2, field: "text" as const, value: "Final" }] }),
+    new Map([["t1", t]]),
+    [t],
+  );
+  assert.equal(changes[0]!.status, "applicable");
+});

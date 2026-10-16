@@ -31,6 +31,7 @@ export async function GET(
       name: m.user?.name ?? "AI",
       kind: m.kind,
       text: m.message,
+      meta: m.meta,
       createdAt: m.createdAt,
     })),
     nextCursor: rows.length === PAGE ? rows[0]?.id : null,

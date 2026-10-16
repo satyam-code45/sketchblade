@@ -418,7 +418,7 @@ export default function Canvas({
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="relative h-screen w-screen overflow-hidden">
+    <div data-app-shell className="relative h-[100dvh] w-screen overflow-hidden overscroll-none">
       {/* Canvas fills entire screen */}
       <canvas ref={canvasRef} className="absolute inset-0 touch-none" />
 
@@ -600,7 +600,10 @@ export default function Canvas({
       )}
 
       {/* ── Center: tool palette ── */}
-      <div className="absolute left-1/2 top-4 z-20 -translate-x-1/2">
+      <div
+        className="absolute left-1/2 top-4 z-20 -translate-x-1/2 transition-[left] duration-200"
+        style={{ left: sidebar ? "calc(50% - 190px)" : undefined }}
+      >
         <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/90 p-1.5 shadow-lg backdrop-blur-md">
           {TOOL_GROUPS.map((group, gi) => (
             <React.Fragment key={gi}>
@@ -744,7 +747,10 @@ export default function Canvas({
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoFile} />
 
       {/* ── Top-right: presence + theme ── */}
-      <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
+      <div
+        className="absolute right-4 top-4 z-20 flex items-center gap-2 transition-[right] duration-200"
+        style={{ right: sidebar ? "calc(380px + 1rem)" : undefined }}
+      >
         {/* Online users — clickable dropdown */}
         {onlineUsers.length > 0 && (
           <div ref={presenceRef} className="relative">
@@ -859,7 +865,10 @@ export default function Canvas({
 
       {/* ── Selection status (select tool) ── */}
       {selection.count > 0 && (
-        <div className="absolute bottom-[4.25rem] left-1/2 z-20 flex max-w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md">
+        <div
+          className="absolute bottom-[4.25rem] left-1/2 z-20 flex max-w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-2 shadow-lg backdrop-blur-md transition-[left] duration-200"
+          style={{ left: sidebar ? "calc(50% - 190px)" : undefined }}
+        >
           <p className="text-[11px] text-muted-foreground">
             <span className="font-medium text-foreground">
               {selection.count === 1 ? "1 shape" : `${selection.count} shapes`} selected

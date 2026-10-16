@@ -29,7 +29,9 @@ export type DiagramNode = z.infer<typeof NodeSchema> & { stroke: string; fill: s
 export type DiagramConnection = z.infer<typeof ConnectionSchema>;
 export type Diagram = { title: string; elements: DiagramNode[]; connections: DiagramConnection[] };
 
-const PALETTE = [
+// Saturated strokes on pale fills read well on white and vanish on a dark
+// canvas, so each theme gets its own ramp.
+const PALETTE_LIGHT = [
   { stroke: "#2563eb", fill: "#dbeafe" },
   { stroke: "#16a34a", fill: "#dcfce7" },
   { stroke: "#7c3aed", fill: "#ede9fe" },
@@ -38,6 +40,21 @@ const PALETTE = [
   { stroke: "#be123c", fill: "#ffe4e6" },
   { stroke: "#475569", fill: "#f1f5f9" },
 ];
+
+const PALETTE_DARK = [
+  { stroke: "#7dd3fc", fill: "#0c2a3f" },
+  { stroke: "#86efac", fill: "#0d2f1d" },
+  { stroke: "#c4b5fd", fill: "#241b4a" },
+  { stroke: "#fdba74", fill: "#3a2008" },
+  { stroke: "#67e8f9", fill: "#0b2f36" },
+  { stroke: "#fda4af", fill: "#3c1220" },
+  { stroke: "#cbd5e1", fill: "#1e2430" },
+];
+
+export type Theme = "light" | "dark";
+
+export const titleColorFor = (theme: Theme) => (theme === "dark" ? "#e2e8f0" : "#0f172a");
+export const edgeColorFor = (theme: Theme) => (theme === "dark" ? "#94a3b8" : "#64748b");
 
 const MAX_NODES = 12;
 const clampNum = (v: unknown, lo: number, hi: number, fallback: number) =>
@@ -48,9 +65,10 @@ const slug = (v: string, fallback: string) =>
 
 // The trust boundary around a non-deterministic component: a hallucinating
 // model must not be able to put nonsense on someone's canvas.
-export function clamp(raw: z.infer<typeof DiagramSchema>): Diagram {
+export function clamp(raw: z.infer<typeof DiagramSchema>, theme: Theme = "light"): Diagram {
   const elements = raw.elements.slice(0, MAX_NODES).map((n, i) => {
-    const palette = PALETTE[i % PALETTE.length]!;
+    const ramp = theme === "dark" ? PALETTE_DARK : PALETTE_LIGHT;
+    const palette = ramp[i % ramp.length]!;
     return {
       id: slug(n.id, `node-${i + 1}`),
       type: n.type,

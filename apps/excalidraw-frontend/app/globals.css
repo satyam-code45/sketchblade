@@ -160,7 +160,8 @@ html {
 
 /* Keyboard users need a way past the nav. */
 .skip-link {
-  position: absolute;
+  position: fixed;
+  top: 0;
   left: -9999px;
   z-index: 100;
 }
@@ -171,4 +172,11 @@ html {
   border-radius: var(--radius);
   background: var(--primary);
   color: var(--primary-foreground);
+}
+
+/* The canvas is a fixed viewport app; nothing here should scroll the document,
+   and a stray scrollIntoView used to drag the whole UI off the top. */
+body:has([data-app-shell]) {
+  overflow: hidden;
+  overscroll-behavior: none;
 }

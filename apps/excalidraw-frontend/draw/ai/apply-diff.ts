@@ -1,7 +1,7 @@
 import type { Shape } from "..";
 import type { EditDiff } from "@repo/ai";
 
-export type Status = "applicable" | "stale" | "orphaned";
+export type Status = "applicable" | "stale" | "orphaned" | "unsupported";
 
 export type Change =
   | { kind: "add"; status: "applicable"; shape: Shape; describe: string }
@@ -10,12 +10,30 @@ export type Change =
 
 const NUMERIC = new Set(["x", "y", "width", "height", "strokeWidth", "fontSize"]);
 
+// A field the target cannot hold would apply silently and change nothing, so
+// it is reported as skipped instead of being called a success.
+const FIELDS_BY_TYPE: Record<string, Set<string>> = {
+  rect: new Set(["x", "y", "width", "height", "color", "fillColor", "strokeWidth"]),
+  diamond: new Set(["x", "y", "width", "height", "color", "fillColor", "strokeWidth"]),
+  ellipse: new Set(["color", "fillColor", "strokeWidth"]),
+  arrow: new Set(["color", "strokeWidth"]),
+  line: new Set(["color", "strokeWidth"]),
+  pencil: new Set(["color", "strokeWidth"]),
+  highlighter: new Set(["color"]),
+  text: new Set(["x", "y", "text", "color", "fontSize"]),
+  image: new Set(["x", "y", "width", "height"]),
+  video: new Set(["x", "y", "width", "height"]),
+};
+
+const supports = (s: Shape, field: string) => FIELDS_BY_TYPE[s.type]?.has(field) ?? false;
+
 // The whole point of the proposal model: the diff was computed against a board
 // that is seconds old, so every target is re-checked against live state.
 export function classifyDiff(
   diff: EditDiff,
   byAlias: Map<string, Shape>,
   current: Shape[],
+  labelOf?: Map<string, Shape>,
 ): Change[] {
   const live = new Map(current.filter((s) => s.id).map((s) => [s.id!, s]));
   const changes: Change[] = [];
@@ -38,15 +56,22 @@ export function classifyDiff(
   }
 
   for (const m of diff.modify) {
-    const target = byAlias.get(m.ref);
-    const status = statusOf(target, m.version, live);
+    let target = byAlias.get(m.ref);
+    // Asking to retitle a box means editing the text drawn inside it.
+    if (m.field === "text" && target && target.type !== "text") {
+      target = labelOf?.get(m.ref) ?? target;
+    }
+    let status = statusOf(target, m.version, live);
+    if (status === "applicable" && target && !supports(target, m.field)) {
+      status = "unsupported";
+    }
     changes.push({
       kind: "modify",
       status,
       id: target?.id ?? m.ref,
       field: m.field,
       value: m.value,
-      describe: `Set ${m.field} to ${m.value} on ${labelOf(target, m.ref)}`,
+      describe: `Set ${m.field} to ${m.value} on ${describeTarget(target, m.ref)}`,
     });
   }
 
@@ -56,7 +81,7 @@ export function classifyDiff(
       kind: "remove",
       status: statusOf(target, r.version, live),
       id: target?.id ?? r.ref,
-      describe: `Remove ${labelOf(target, r.ref)}`,
+      describe: `Remove ${describeTarget(target, r.ref)}`,
     });
   }
 
@@ -72,7 +97,7 @@ function statusOf(target: Shape | undefined, sawVersion: number, live: Map<strin
   return "applicable";
 }
 
-function labelOf(s: Shape | undefined, fallback: string) {
+function describeTarget(s: Shape | undefined, fallback: string) {
   if (!s) return fallback;
   return s.type === "text" ? `"${s.text}"` : s.type;
 }

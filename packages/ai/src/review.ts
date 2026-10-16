@@ -54,6 +54,8 @@ Only reference aliases that appear in the board listing. Keep the change set sma
 targeted: prefer editing a handful of things over rewriting the board.
 
 Rules:
+- To change the words on a box, target its label alias (shown as label=n1L), not
+  the box itself. A box holds no text of its own.
 - modify.value is always a string; numbers as digits, colours as hex.
 - version must be the version shown for that alias in the listing.
 - add uses board coordinates; place new nodes clear of existing ones.

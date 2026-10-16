@@ -16,6 +16,7 @@ type Turn = {
   text: string;
   streaming?: boolean;
   diagram?: { title: string; nodes: number; centre: { x: number; y: number } };
+  proposedShapes?: Shape[];
   findings?: Finding[];
   changes?: Change[];
   pending?: boolean;
@@ -30,6 +31,7 @@ const SEVERITY: Record<string, string> = {
 const STATUS_NOTE: Record<string, string> = {
   stale: "changed by someone else",
   orphaned: "no longer on the board",
+  unsupported: "that shape has no such property",
 };
 
 const EXAMPLES = [
@@ -43,11 +45,30 @@ const auth = () => ({
   "content-type": "application/json",
 });
 
+// The room broadcast includes the sender, so our own message came back and
+// rendered a second time under our real name.
+const myUserId = (): string | null => {
+  try {
+    const t = localStorage.getItem("token");
+    return t ? JSON.parse(atob(t.split(".")[1]!)).userId ?? null : null;
+  } catch {
+    return null;
+  }
+};
+
+// Place new work below what is already drawn rather than over the top of it.
+function placeBelow(game: Game, spanX: number, spanY: number) {
+  const b = game.getContentBounds();
+  const view = game.getViewportCenter();
+  if (!b) return { x: view.x - spanX / 2, y: view.y - spanY / 2 };
+  return { x: b.minX, y: b.maxY + 80 };
+}
+
 export default function Thread({ game, roomId }: { game: Game | null; roomId: string }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch(`/api/rooms/${roomId}/messages`, { headers: auth() })
@@ -59,10 +80,14 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
   // Messages from other people in the room arrive over the socket.
   const onEvent = useCallback((msg: Record<string, unknown>) => {
     if (msg.type !== "chat_message") return;
+    if (msg.userId && msg.userId === myUserId()) return;
     setTurns((t) => [...t, fromRow(msg as never)]);
   }, []);
   useEffect(() => { if (game) game.onChat = onEvent; }, [game, onEvent]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [turns, busy]);
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [turns, busy]);
 
   const say = (t: Turn) => setTurns((prev) => [...prev, t]);
 
@@ -76,12 +101,11 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
     game.sendChat(text, board.text);
     say({ id: `me-${Date.now()}`, who: "you", name: "You", text });
 
-    const centre = game.getViewportCenter();
     try {
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: auth(),
-        body: JSON.stringify({ roomId: Number(roomId), text, board: board.text }),
+        body: JSON.stringify({ roomId: Number(roomId), text, board: board.text, theme: game.theme }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? "The assistant could not reply.");
@@ -89,16 +113,23 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
       if (body.action === "generate") {
         const spanX = Math.max(...body.diagram.elements.map((e: { x: number; width: number }) => e.x + e.width), 0);
         const spanY = Math.max(...body.diagram.elements.map((e: { y: number; height: number }) => e.y + e.height), 0);
-        game.addShapes(compileDiagram(body.diagram, { x: centre.x - spanX / 2, y: centre.y - spanY / 2 }));
+        const origin = placeBelow(game, spanX, spanY);
+        const shapes = compileDiagram(body.diagram, origin, game.theme);
+
+        // Show it in place first; nothing is committed until they say so.
+        game.setPreview(shapes);
+        game.centreOn({ x: origin.x + spanX / 2, y: origin.y + spanY / 2 });
         say({
           id: `ai-${Date.now()}`, who: "ai", name: "Assistant",
-          text: `Drew “${body.diagram.title}”.`,
-          diagram: { title: body.diagram.title, nodes: body.diagram.elements.length, centre },
+          text: `Ready to place “${body.diagram.title}”.`,
+          diagram: { title: body.diagram.title, nodes: body.diagram.elements.length, centre: { x: origin.x + spanX / 2, y: origin.y + spanY / 2 } },
+          proposedShapes: shapes,
+          pending: true,
         });
       } else if (body.action === "evaluate") {
         say({ id: `ai-${Date.now()}`, who: "ai", name: "Assistant", text: body.evaluation.summary, findings: body.evaluation.findings });
       } else if (body.action === "edit") {
-        const classified = classifyDiff(body.diff, board.byAlias, game.existingShapes);
+        const classified = classifyDiff(body.diff, board.byAlias, game.existingShapes, board.labelOf);
         game.setPreview(classified.filter((c) => c.kind === "add" && c.status === "applicable").map((c) => (c as { shape: Shape }).shape));
         say({ id: `ai-${Date.now()}`, who: "ai", name: "Assistant", text: body.diff.rationale, changes: classified, pending: true });
       } else {
@@ -113,7 +144,19 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
 
   const resolve = (id: string | number, accept: boolean) => {
     setTurns((prev) => prev.map((t) => {
-      if (t.id !== id || !t.changes) return t;
+      if (t.id !== id) return t;
+
+      if (t.proposedShapes) {
+        if (accept && game) game.addShapes(t.proposedShapes);
+        return {
+          ...t,
+          pending: false,
+          proposedShapes: undefined,
+          text: accept ? `Placed “${t.diagram?.title}”.` : `Discarded “${t.diagram?.title}”.`,
+        };
+      }
+
+      if (!t.changes) return t;
       if (accept && game) {
         const live = t.changes.filter((c) => c.status === "applicable");
         game.applyDiff({
@@ -132,7 +175,7 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-4">
+      <div ref={listRef} className="flex-1 space-y-5 overflow-y-auto px-4 pb-4">
         {turns.length === 0 && !busy && (
           <div className="mt-8">
             <div className="text-center">
@@ -166,19 +209,41 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
               </span>
             </div>
 
-            <p className={`whitespace-pre-wrap text-pretty text-[13px] leading-relaxed ${
-              t.who === "ai" ? "border-l-2 border-primary/25 pl-3 text-foreground/90" : "text-foreground/80"
+            <div className={`text-pretty text-[13px] leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${
+              t.who === "ai" ? "border-l-2 border-primary/25 pl-3 text-foreground/90" : "whitespace-pre-wrap text-foreground/80"
             }`}>
-              {t.text}
-            </p>
+              {t.who === "ai" ? <RichText value={t.text} /> : t.text}
+            </div>
 
-            {t.diagram && (
+            {t.diagram && !t.pending && (
               <button
                 onClick={() => game?.centreOn(t.diagram!.centre)}
                 className="nums ml-3 mt-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 <Crosshair className="size-3" /> {t.diagram.nodes} nodes · scroll to it
               </button>
+            )}
+
+            {t.proposedShapes && t.pending && (
+              <div className="ml-3 mt-2 rounded-lg border border-primary/30 bg-primary/5 p-2.5">
+                <p className="nums text-[11px] text-muted-foreground">
+                  Outlined on the canvas below your work · {t.diagram?.nodes} nodes
+                </p>
+                <div className="mt-2 flex gap-1.5">
+                  <button
+                    onClick={() => resolve(t.id, true)}
+                    className="h-7 rounded-lg bg-primary px-3 text-[11px] font-medium text-primary-foreground transition-all hover:brightness-110 active:scale-95"
+                  >
+                    Place it
+                  </button>
+                  <button
+                    onClick={() => resolve(t.id, false)}
+                    className="h-7 rounded-lg border border-border/60 px-3 text-[11px] transition-colors hover:bg-accent"
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
             )}
 
             {t.findings && (
@@ -246,7 +311,6 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
             <span className="size-1.5 animate-bounce rounded-full bg-primary/60" />
           </div>
         )}
-        <div ref={endRef} />
       </div>
 
       <div className="px-4 pb-4">
@@ -283,11 +347,54 @@ export default function Thread({ game, roomId }: { game: Game | null; roomId: st
   );
 }
 
-function fromRow(m: { id: number; name: string; kind: string; text: string; meta?: { action?: string; title?: string; nodes?: number } }): Turn {
+function fromRow(m: {
+  id: number; name: string; kind: string; text: string; userId?: string | null;
+  meta?: { action?: string; title?: string; nodes?: number; findings?: Finding[] };
+}): Turn {
+  const mine = m.userId && m.userId === myUserId();
   return {
     id: m.id,
-    who: m.kind === "ai" ? "ai" : "them",
-    name: m.kind === "ai" ? "Assistant" : m.name,
+    who: m.kind === "ai" ? "ai" : mine ? "you" : "them",
+    name: m.kind === "ai" ? "Assistant" : mine ? "You" : m.name,
     text: m.text,
+    // Findings were stored with the turn, so a reload keeps them as findings.
+    findings: m.meta?.findings,
   };
+}
+
+// The model writes "- item" lists and **bold**; rendering them raw looked like
+// a wall of text. Not a markdown parser, just these two.
+function RichText({ value }: { value: string }) {
+  const bold = (line: string) =>
+    line.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+      part.startsWith("**") && part.endsWith("**")
+        ? <strong key={i} className="font-medium text-foreground">{part.slice(2, -2)}</strong>
+        : <span key={i}>{part}</span>,
+    );
+
+  const blocks: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  const flush = () => {
+    if (!bullets.length) return;
+    blocks.push(
+      <ul key={`l${blocks.length}`} className="my-1.5 space-y-1">
+        {bullets.map((b, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="mt-[7px] size-1 shrink-0 rounded-full bg-muted-foreground/60" />
+            <span>{bold(b)}</span>
+          </li>
+        ))}
+      </ul>,
+    );
+    bullets = [];
+  };
+
+  for (const line of value.split("\n")) {
+    const item = line.match(/^\s*[-*\u2022]\s+(.*)$/);
+    if (item) { bullets.push(item[1]!); continue; }
+    flush();
+    if (line.trim()) blocks.push(<p key={`p${blocks.length}`} className="my-1.5">{bold(line)}</p>);
+  }
+  flush();
+  return <>{blocks}</>;
 }

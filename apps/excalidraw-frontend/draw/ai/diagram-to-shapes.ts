@@ -1,10 +1,9 @@
 import type { Shape } from "..";
-import type { Diagram, DiagramNode } from "@repo/ai";
+import type { Diagram, DiagramNode, Theme } from "@repo/ai";
 
 const LABEL_SIZE = 16;
 const TITLE_SIZE = 28;
 const LINE_HEIGHT = 20;
-const EDGE_COLOR = "#64748b";
 
 // No canvas here so this stays pure and testable; 0.55em is close enough for
 // centring that a few pixels of drift is invisible.
@@ -47,7 +46,13 @@ export function anchorPoints(from: DiagramNode, to: DiagramNode, o: { x: number;
     : { startX: fx, startY: fcy, endX: tx + to.width, endY: tcy };
 }
 
-export function compileDiagram(diagram: Diagram, origin: { x: number; y: number }): Shape[] {
+export function compileDiagram(
+  diagram: Diagram,
+  origin: { x: number; y: number },
+  theme: Theme = "light",
+): Shape[] {
+  const dark = theme === "dark";
+  const EDGE_COLOR = dark ? "#94a3b8" : "#64748b";
   const shapes: Shape[] = [];
 
   if (diagram.title) {
@@ -57,7 +62,7 @@ export function compileDiagram(diagram: Diagram, origin: { x: number; y: number 
       y: origin.y - 34,
       text: diagram.title,
       fontSize: TITLE_SIZE,
-      color: "#0f172a",
+      color: dark ? "#e2e8f0" : "#0f172a",
     });
   }
 

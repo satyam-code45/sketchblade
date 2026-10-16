@@ -636,6 +636,14 @@ export class Game {
     this.clearCanvas();
   }
 
+  get theme(): "light" | "dark" { return this.isDark ? "dark" : "light"; }
+
+  // Where the drawn content actually ends, so new shapes land clear of it.
+  getContentBounds(): Bounds | null {
+    if (this.existingShapes.length === 0) return null;
+    return this.getPaddedBounds(this.existingShapes, 0);
+  }
+
   getViewportCenter() {
     const rect = this.canvas.getBoundingClientRect();
     return this.toCanvas(rect.left + rect.width / 2, rect.top + rect.height / 2);
